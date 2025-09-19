@@ -53,6 +53,7 @@ echo "uinput" | sudo tee -a /etc/modules
 ./build.sh
 ./appimage/WaveControl-x86_64.AppImage
 ```
+> ✨ Funciona em qualquer distro Linux, com ou sem FUSE automaticamente
 
 ### Execução direta
 ```bash

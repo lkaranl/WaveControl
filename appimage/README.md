@@ -1,54 +1,47 @@
 # AppImage Build
 
-Scripts para criar AppImage portável do WaveControl.
+Cria AppImage que funciona em qualquer distro Linux, com ou sem FUSE.
 
-## Build rápido
+## Build
 
 ```bash
 # No diretório raiz do projeto
 ./build.sh
 ```
 
-## Scripts disponíveis
+## Características
 
-### build_portable.sh (Recomendado)
-- AppImage completo com todas dependências Python
-- Tamanho: ~289MB
-- Funciona em qualquer distro Linux moderna
-
-### build_simple.sh
-- AppImage compacto
-- Requer dependências Python no sistema
-- Tamanho: menor
-
-### build_appimage.sh
-- Build básico
-- Para desenvolvimento/teste
+- **Universal**: Funciona em Ubuntu, Fedora, Arch, openSUSE, etc.
+- **Auto-detecção**: Funciona com ou sem FUSE automaticamente
+- **Portável**: Inclui todas as dependências Python (~290MB)
+- **Inteligente**: Extrai automaticamente se FUSE não estiver disponível
 
 ## Uso
 
 1. Execute o build:
 ```bash
-cd appimage/scripts
-./build_portable.sh
+./build.sh
 ```
 
 2. Execute o AppImage:
 ```bash
-./WaveControl-x86_64.AppImage
+./appimage/WaveControl-x86_64.AppImage
 ```
 
 3. Instalar permanente (opcional):
 ```bash
 mkdir -p ~/.local/bin
-cp WaveControl-x86_64.AppImage ~/.local/bin/wavecontrol
+cp appimage/WaveControl-x86_64.AppImage ~/.local/bin/wavecontrol
 chmod +x ~/.local/bin/wavecontrol
 ```
 
-## Requisitos
+## Dependências mínimas
 
-- AppImageTool (baixado automaticamente)
-- Python 3.8+
-- GTK 3.0+
+- Python3 (disponível em qualquer Linux)
+- PyGObject/GTK3 (instalação de uma linha)
 
-O AppImage funciona em Ubuntu, Fedora, openSUSE, Arch e outras distros.
+## Como funciona
+
+- **Com FUSE**: Executa normalmente (mais rápido)
+- **Sem FUSE**: Extrai automaticamente para `/tmp` e executa
+- **Limpeza automática**: Remove arquivos temporários ao sair
