@@ -106,6 +106,32 @@ if [ ! -f "main.py" ] || [ ! -f "requirements.txt" ]; then
     exit 1
 fi
 
+# Verificar versão do Python
+echo "🐍 Verificando versão do Python..."
+PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+echo "Versão detectada: Python $PYTHON_VERSION"
+
+if [[ "$PYTHON_VERSION" != "3.11" ]]; then
+    echo ""
+    echo "⚠️  AVISO: Recomendamos Python 3.11 para compatibilidade total"
+    echo "   Versão atual: $PYTHON_VERSION"
+    echo ""
+    echo "📋 Se tiver problemas com mediapipe, instale Python 3.11:"
+    echo ""
+    echo "🔵 Ubuntu/Debian:"
+    echo "   sudo apt install python3.11 python3.11-venv python3.11-dev"
+    echo "   sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1"
+    echo ""
+    echo "🔴 Fedora:"
+    echo "   sudo dnf install python3.11 python3.11-devel"
+    echo ""
+    echo "🟡 Arch Linux:"
+    echo "   yay -S python311  # ou use pyenv"
+    echo ""
+    echo "Continuando com Python $PYTHON_VERSION..."
+    echo ""
+fi
+
 # Executar instalação
 detect_distro
 install_system_deps

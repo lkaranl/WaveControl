@@ -5,6 +5,51 @@ set -e
 
 echo "=== Construindo WaveControl AppImage Portável FINAL ==="
 
+# Verificar versão do Python
+PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+echo "🐍 Python detectado: $PYTHON_VERSION"
+
+if [[ "$PYTHON_VERSION" != "3.11" ]]; then
+    echo ""
+    echo "❌ ERRO: Este build requer Python 3.11"
+    echo "   Versão atual: $PYTHON_VERSION"
+    echo ""
+    echo "📋 COMO CONFIGURAR PYTHON 3.11:"
+    echo ""
+    echo "🔵 Ubuntu/Debian:"
+    echo "   sudo apt update"
+    echo "   sudo apt install python3.11 python3.11-venv python3.11-dev"
+    echo "   sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1"
+    echo ""
+    echo "🔴 Fedora:"
+    echo "   sudo dnf install python3.11 python3.11-devel"
+    echo "   sudo alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1"
+    echo ""
+    echo "🟡 Arch Linux:"
+    echo "   # Python 3.11 pode estar no AUR:"
+    echo "   yay -S python311"
+    echo "   # Ou use pyenv:"
+    echo "   yay -S pyenv"
+    echo "   pyenv install 3.11.9"
+    echo "   pyenv global 3.11.9"
+    echo ""
+    echo "🐍 Alternativa com pyenv (todas as distros):"
+    echo "   curl https://pyenv.run | bash"
+    echo "   # Adicione ao ~/.bashrc:"
+    echo "   echo 'export PATH=\"\$HOME/.pyenv/bin:\$PATH\"' >> ~/.bashrc"
+    echo "   echo 'eval \"\$(pyenv init --path)\"' >> ~/.bashrc"
+    echo "   echo 'eval \"\$(pyenv init -)\"' >> ~/.bashrc"
+    echo "   source ~/.bashrc"
+    echo "   pyenv install 3.11.9"
+    echo "   pyenv global 3.11.9"
+    echo ""
+    echo "🔄 Após configurar Python 3.11, execute novamente:"
+    echo "   ./build_portable.sh"
+    exit 1
+fi
+
+echo "✅ Python 3.11 confirmado, continuando..."
+
 # Limpar estrutura anterior
 rm -rf WaveControl.AppDir
 rm -f WaveControl-Portable-x86_64.AppImage
@@ -19,10 +64,7 @@ echo "Instalando dependências Python no AppImage..."
 
 # Instalar dependências usando pip install --target
 pip3 install --target=WaveControl.AppDir/usr/lib/python3/site-packages \
-    opencv-python \
-    mediapipe \
-    python-uinput \
-    numpy
+    -r ../../requirements.txt
 
 echo "Dependências instaladas com sucesso!"
 

@@ -12,6 +12,8 @@ Controle apresentações com gestos da mão usando a webcam. Interface gráfica 
 
 ## Instalação
 
+⚠️ **Requer Python 3.11** para compatibilidade total com mediapipe
+
 ### Automática (Recomendado)
 ```bash
 ./install.sh
