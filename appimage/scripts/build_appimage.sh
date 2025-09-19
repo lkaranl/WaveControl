@@ -15,10 +15,11 @@ mkdir -p WaveControl.AppDir/usr/share/applications
 mkdir -p WaveControl.AppDir/usr/share/icons/hicolor/256x256/apps
 
 # Baixar AppImageTool se não existir
-if [ ! -f "appimagetool-x86_64.AppImage" ]; then
+if [ ! -f "../tools/appimagetool-x86_64.AppImage" ]; then
     echo "Baixando AppImageTool..."
-    wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-    chmod +x appimagetool-x86_64.AppImage
+    mkdir -p ../tools
+    wget -q -O ../tools/appimagetool-x86_64.AppImage https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+    chmod +x ../tools/appimagetool-x86_64.AppImage
 fi
 
 # Nota: Este AppImage assume que as dependências já estão instaladas no sistema
@@ -50,7 +51,7 @@ done
 
 # Gerar AppImage
 echo "Gerando AppImage..."
-./appimagetool-x86_64.AppImage WaveControl.AppDir WaveControl-x86_64.AppImage
+../tools/appimagetool-x86_64.AppImage WaveControl.AppDir ../WaveControl-x86_64.AppImage
 
 echo ""
 echo "=== AppImage criado com sucesso! ==="

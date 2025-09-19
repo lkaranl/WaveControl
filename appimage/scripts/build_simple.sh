@@ -51,8 +51,17 @@ EOF
 
 cp WaveControl.AppDir/WaveControl.desktop WaveControl.AppDir/usr/share/applications/
 
-# Criar ícone
-python3 -c "
+# Usar logo oficial da pasta img
+if [ -f "../img/256x256.png" ]; then
+    echo "Usando logo oficial 256x256..."
+    cp ../img/256x256.png WaveControl.AppDir/wavecontrol.png
+elif [ -f "../img/64x64.png" ]; then
+    echo "Usando logo oficial 64x64..."
+    cp ../img/64x64.png WaveControl.AppDir/wavecontrol.png
+else
+    echo "Logo oficial não encontrado, criando ícone básico..."
+    # Fallback: criar ícone básico
+    python3 -c "
 import cv2
 import numpy as np
 
@@ -66,20 +75,21 @@ cv2.rectangle(icon, (158, 80), (178, 140), (0, 150, 255), -1)
 cv2.putText(icon, 'WAVE', (70, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
 cv2.imwrite('WaveControl.AppDir/wavecontrol.png', icon)
 "
+fi
 
 cp WaveControl.AppDir/wavecontrol.png WaveControl.AppDir/usr/share/icons/hicolor/256x256/apps/
 
-# Usar AppImageTool da pasta tools
-if [ ! -f "../../tools/appimagetool-x86_64.AppImage" ]; then
+# Usar AppImageTool da pasta appimage/tools
+if [ ! -f "../tools/appimagetool-x86_64.AppImage" ]; then
     echo "Baixando AppImageTool..."
-    mkdir -p ../../tools
-    wget -q -O ../../tools/appimagetool-x86_64.AppImage https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-    chmod +x ../../tools/appimagetool-x86_64.AppImage
+    mkdir -p ../tools
+    wget -q -O ../tools/appimagetool-x86_64.AppImage https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+    chmod +x ../tools/appimagetool-x86_64.AppImage
 fi
 
 # Gerar AppImage
 echo "Gerando AppImage..."
-ARCH=x86_64 ../../tools/appimagetool-x86_64.AppImage WaveControl.AppDir ../WaveControl-x86_64.AppImage
+ARCH=x86_64 ../tools/appimagetool-x86_64.AppImage WaveControl.AppDir ../WaveControl-x86_64.AppImage
 
 echo ""
 echo "=== AppImage criado com sucesso! ==="

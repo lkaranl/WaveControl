@@ -168,22 +168,18 @@ EOF
 
 cp WaveControl.AppDir/WaveControl.desktop WaveControl.AppDir/usr/share/applications/
 
-# Criar ícone simples usando convert (ImageMagick) ou fallback
-if command -v convert >/dev/null 2>&1; then
-    # Usar ImageMagick se disponível
-    convert -size 256x256 xc:'#1e1e1e' -fill '#0096ff' -draw 'circle 128,180 80,120' \
-            -fill '#0096ff' -draw 'rectangle 98,80 118,140' \
-            -fill '#0096ff' -draw 'rectangle 118,60 138,140' \
-            -fill '#0096ff' -draw 'rectangle 138,70 158,140' \
-            -fill '#0096ff' -draw 'rectangle 158,80 178,140' \
-            -fill white -pointsize 48 -gravity south -annotate +0+20 'WAVE' \
-            WaveControl.AppDir/wavecontrol.png
+# Usar logo oficial da pasta img
+if [ -f "../img/256x256.png" ]; then
+    echo "Usando logo oficial 256x256..."
+    cp ../img/256x256.png WaveControl.AppDir/wavecontrol.png
+elif [ -f "../img/64x64.png" ]; then
+    echo "Usando logo oficial 64x64..."
+    cp ../img/64x64.png WaveControl.AppDir/wavecontrol.png
 else
+    echo "Logo oficial não encontrado, criando ícone básico..."
     # Fallback: PNG mínimo válido 1x1 preto
     python3 -c "
-import struct
-# PNG 1x1 preto mínimo válido
-data = b'\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x01\\x08\\x02\\x00\\x00\\x00\\x90wS\\xde\\x00\\x00\\x00\\x0cIDATx\\x9cc```\\x00\\x00\\x00\\x04\\x00\\x01\\xa9\\xd1\\x99\\xec\\x00\\x00\\x00\\x00IEND\\xaeB\`\\x82'
+data = b'\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x01\\x08\\x02\\x00\\x00\\x00\\x90wS\\xde\\x00\\x00\\x00\\x0cIDATx\\x9cc\`\`\`\\x00\\x00\\x00\\x04\\x00\\x01\\xa9\\xd1\\x99\\xec\\x00\\x00\\x00\\x00IEND\\xaeB\`\\x82'
 with open('WaveControl.AppDir/wavecontrol.png', 'wb') as f:
     f.write(data)
 "
