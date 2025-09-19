@@ -4,6 +4,7 @@ import time
 import uinput
 import mediapipe as mp
 import gi
+import os
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib, GdkPixbuf, Gdk
 import threading
@@ -104,9 +105,12 @@ def press_prev():
 # ===== Interface Gráfica GTK =====
 class WaveControlGUI(Gtk.Window):
     def __init__(self):
-        Gtk.Window.__init__(self, title="WaveControl - Controle por Gestos")
-        self.set_default_size(800, 600)
+        Gtk.Window.__init__(self)
+        self.set_default_size(850, 600)
         self.set_position(Gtk.WindowPosition.CENTER)
+        
+        # Aplicar CSS moderno
+        self.apply_modern_styling()
         
         # Variáveis de controle
         self.is_running = False
@@ -120,91 +124,246 @@ class WaveControlGUI(Gtk.Window):
         
         # Conecta eventos
         self.connect("destroy", self.on_window_destroy)
+    
+    def apply_modern_styling(self):
+        """Aplica estilo minimalista respeitando o tema GTK"""
+        css_provider = Gtk.CssProvider()
+        css = """
+        /* Layout minimalista usando cores do tema */
+        .main-container {
+            margin: 12px;
+        }
+        
+        .header-section {
+            padding: 16px 20px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid alpha(@borders, 0.3);
+        }
+        
+        .app-title {
+            font-size: 20px;
+            font-weight: 500;
+        }
+        
+        .app-subtitle {
+            font-size: 13px;
+            opacity: 0.7;
+            margin-top: 2px;
+        }
+        
+        .content-section {
+            margin: 8px 0;
+        }
+        
+        .video-area {
+            border-radius: 8px;
+            border: 1px solid alpha(@borders, 0.2);
+            padding: 12px;
+            margin: 8px;
+        }
+        
+        .video-container {
+            border-radius: 6px;
+            border: 2px dashed alpha(@borders, 0.4);
+            min-height: 300px;
+            background: alpha(@theme_base_color, 0.3);
+        }
+        
+        .controls-section {
+            margin: 8px;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid alpha(@borders, 0.2);
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 12px;
+            opacity: 0.9;
+        }
+        
+        .primary-button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        
+        .status-indicator {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+            background: alpha(@theme_selected_bg_color, 0.1);
+            color: @theme_selected_bg_color;
+        }
+        
+        .info-section {
+            margin: 8px;
+            padding: 12px;
+            border-radius: 6px;
+            background: alpha(@theme_selected_bg_color, 0.05);
+            border-left: 3px solid alpha(@theme_selected_bg_color, 0.3);
+        }
+        
+        .instruction-text {
+            font-size: 13px;
+            margin: 4px 0;
+        }
+        
+        .tip-text {
+            font-size: 12px;
+            font-style: italic;
+            opacity: 0.7;
+            margin-top: 8px;
+        }
+        """
+        css_provider.load_from_data(css.encode('utf-8'))
+        screen = Gdk.Screen.get_default()
+        style_context = Gtk.StyleContext()
+        style_context.add_provider_for_screen(screen, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         
     def setup_ui(self):
         # Container principal
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        main_box.set_margin_left(20)
-        main_box.set_margin_right(20)
-        main_box.set_margin_top(20)
-        main_box.set_margin_bottom(20)
-        self.add(main_box)
+        main_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        main_container.get_style_context().add_class("main-container")
+        self.add(main_container)
         
-        # Título
-        title_label = Gtk.Label()
-        title_label.set_markup("<big><b>WaveControl - Controle de Slides por Gestos</b></big>")
-        main_box.pack_start(title_label, False, False, 0)
+        # Header minimalista
+        header_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        header_section.get_style_context().add_class("header-section")
+        
+        title_label = Gtk.Label(label="WaveControl")
+        title_label.get_style_context().add_class("app-title")
+        title_label.set_halign(Gtk.Align.START)
+        
+        subtitle_label = Gtk.Label(label="Controle de slides por gestos")
+        subtitle_label.get_style_context().add_class("app-subtitle")
+        subtitle_label.set_halign(Gtk.Align.START)
+        
+        header_section.pack_start(title_label, False, False, 0)
+        header_section.pack_start(subtitle_label, False, False, 0)
+        main_container.pack_start(header_section, False, False, 0)
         
         # Área de vídeo
-        self.video_frame = Gtk.Frame()
-        self.video_frame.set_label("Visualização da Câmera")
+        video_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        video_section.get_style_context().add_class("video-area")
+        
+        video_title = Gtk.Label(label="Visualização")
+        video_title.get_style_context().add_class("section-title")
+        video_title.set_halign(Gtk.Align.START)
+        
+        # Container do vídeo
+        video_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        video_container.get_style_context().add_class("video-container")
+        video_container.set_size_request(-1, 300)
+        
         self.video_image = Gtk.Image()
-        self.video_image.set_size_request(640, 480)
-        self.video_frame.add(self.video_image)
-        main_box.pack_start(self.video_frame, True, True, 0)
+        self.video_image.set_halign(Gtk.Align.CENTER)
+        self.video_image.set_valign(Gtk.Align.CENTER)
         
-        # Painel de controles
-        controls_frame = Gtk.Frame()
-        controls_frame.set_label("Controles")
-        controls_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        controls_box.set_margin_left(10)
-        controls_box.set_margin_right(10)
-        controls_box.set_margin_top(10)
-        controls_box.set_margin_bottom(10)
+        # Placeholder simples
+        self.placeholder_label = Gtk.Label(label="Câmera desativada\nClique em 'Iniciar' para começar")
+        self.placeholder_label.set_halign(Gtk.Align.CENTER)
+        self.placeholder_label.set_valign(Gtk.Align.CENTER)
+        self.placeholder_label.set_opacity(0.6)
         
-        # Botão iniciar/parar
-        self.start_button = Gtk.Button.new_with_label("Iniciar Detecção")
+        video_container.pack_start(self.video_image, True, True, 0)
+        video_container.pack_start(self.placeholder_label, True, True, 0)
+        
+        video_section.pack_start(video_title, False, False, 0)
+        video_section.pack_start(video_container, True, True, 0)
+        main_container.pack_start(video_section, True, True, 0)
+        
+        # Layout horizontal para controles e status
+        horizontal_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        main_container.pack_start(horizontal_container, False, False, 0)
+        
+        # Seção de controles
+        controls_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        controls_section.get_style_context().add_class("controls-section")
+        controls_section.set_size_request(240, -1)
+        
+        controls_title = Gtk.Label(label="Controles")
+        controls_title.get_style_context().add_class("section-title")
+        controls_title.set_halign(Gtk.Align.START)
+        
+        # Botão principal
+        self.start_button = Gtk.Button.new_with_label("Iniciar")
+        self.start_button.get_style_context().add_class("primary-button")
         self.start_button.connect("clicked", self.on_start_clicked)
-        controls_box.pack_start(self.start_button, False, False, 0)
         
-        # Checkbox para mostrar landmarks
-        self.show_landmarks_check = Gtk.CheckButton.new_with_label("Mostrar Landmarks")
+        # Checkbox
+        self.show_landmarks_check = Gtk.CheckButton.new_with_label("Mostrar landmarks")
         self.show_landmarks_check.set_active(DRAW)
-        controls_box.pack_start(self.show_landmarks_check, False, False, 0)
         
-        controls_frame.add(controls_box)
-        main_box.pack_start(controls_frame, False, False, 0)
+        controls_section.pack_start(controls_title, False, False, 0)
+        controls_section.pack_start(self.start_button, False, False, 0)
+        controls_section.pack_start(self.show_landmarks_check, False, False, 0)
+        horizontal_container.pack_start(controls_section, False, False, 0)
         
-        # Painel de status
-        status_frame = Gtk.Frame()
-        status_frame.set_label("Status")
-        status_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        status_box.set_margin_left(10)
-        status_box.set_margin_right(10)
-        status_box.set_margin_top(10)
-        status_box.set_margin_bottom(10)
+        # Seção de status
+        status_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        status_section.get_style_context().add_class("controls-section")
         
-        self.status_label = Gtk.Label("Sistema parado")
-        self.action_label = Gtk.Label("Ação: neutral")
-        self.gesture_label = Gtk.Label("Gesto: neutral")
-        self.filter_label = Gtk.Label("Filtro: 0/8")
+        status_title = Gtk.Label(label="Status")
+        status_title.get_style_context().add_class("section-title")
+        status_title.set_halign(Gtk.Align.START)
         
-        status_box.pack_start(self.status_label, False, False, 0)
-        status_box.pack_start(self.action_label, False, False, 0)
-        status_box.pack_start(self.gesture_label, False, False, 0)
-        status_box.pack_start(self.filter_label, False, False, 0)
+        self.status_label = Gtk.Label(label="Sistema parado")
+        self.status_label.set_halign(Gtk.Align.START)
         
-        status_frame.add(status_box)
-        main_box.pack_start(status_frame, False, False, 0)
+        # Container para ação atual
+        action_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        action_label = Gtk.Label(label="Ação:")
+        action_label.set_halign(Gtk.Align.START)
         
-        # Informações
-        info_frame = Gtk.Frame()
-        info_frame.set_label("Instruções")
-        info_label = Gtk.Label()
-        info_label.set_markup(
-            "<b>Como usar:</b>\n"
-            "• <b>1 dedo levantado:</b> Próximo slide (tecla →)\n"
-            "• <b>2 dedos levantados:</b> Slide anterior (tecla ←)\n"
-            "• <b>Feche a mão:</b> Posição neutra (sem ação)\n\n"
-            "<i>O sistema aguarda você retornar à posição neutra antes de executar a próxima ação.</i>"
-        )
-        info_label.set_line_wrap(True)
-        info_label.set_margin_left(10)
-        info_label.set_margin_right(10)
-        info_label.set_margin_top(10)
-        info_label.set_margin_bottom(10)
-        info_frame.add(info_label)
-        main_box.pack_start(info_frame, False, False, 0)
+        self.action_indicator = Gtk.Label(label="neutral")
+        self.action_indicator.get_style_context().add_class("status-indicator")
+        
+        action_container.pack_start(action_label, False, False, 0)
+        action_container.pack_start(self.action_indicator, False, False, 0)
+        
+        # Filtro
+        self.filter_label = Gtk.Label(label="Filtro: 0/8")
+        self.filter_label.set_halign(Gtk.Align.START)
+        self.filter_label.set_opacity(0.7)
+        
+        status_section.pack_start(status_title, False, False, 0)
+        status_section.pack_start(self.status_label, False, False, 0)
+        status_section.pack_start(action_container, False, False, 0)
+        status_section.pack_start(self.filter_label, False, False, 0)
+        horizontal_container.pack_start(status_section, True, True, 0)
+        
+        # Seção de informações
+        info_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        info_section.get_style_context().add_class("info-section")
+        
+        info_title = Gtk.Label(label="Instruções")
+        info_title.get_style_context().add_class("section-title")
+        info_title.set_halign(Gtk.Align.START)
+        
+        instructions = [
+            "1 dedo → Próximo slide",
+            "2 dedos → Slide anterior", 
+            "Mão fechada → Neutro"
+        ]
+        
+        for instruction in instructions:
+            label = Gtk.Label(label=instruction)
+            label.get_style_context().add_class("instruction-text")
+            label.set_halign(Gtk.Align.START)
+            info_section.pack_start(label, False, False, 0)
+        
+        tip_label = Gtk.Label(label="Retorne à posição neutra antes da próxima ação")
+        tip_label.get_style_context().add_class("tip-text")
+        tip_label.set_halign(Gtk.Align.START)
+        tip_label.set_line_wrap(True)
+        tip_label.set_max_width_chars(40)
+        
+        info_section.pack_start(info_title, False, False, 0)
+        info_section.pack_start(tip_label, False, False, 8)
+        main_container.pack_start(info_section, False, False, 0)
         
     def on_start_clicked(self, button):
         if not self.is_running:
@@ -223,17 +382,21 @@ class WaveControlGUI(Gtk.Window):
                 flags=0,
                 message_type=Gtk.MessageType.ERROR,
                 buttons=Gtk.ButtonsType.OK,
-                text="Erro ao acessar a câmera"
+    text="Erro ao acessar a câmera"
             )
-            dialog.format_secondary_text("Verifique se a câmera está conectada e não está sendo usada por outro aplicativo.")
+            dialog.format_secondary_text("Verifique se a câmera está conectada e disponível.")
             dialog.run()
             dialog.destroy()
             return
             
         self.is_running = True
         self.start_ts = time.time()
-        self.start_button.set_label("Parar Detecção")
-        self.status_label.set_text("Sistema rodando - Calibrando...")
+        self.start_button.set_label("Parar")
+        self.status_label.set_text("Sistema calibrando...")
+        
+        # Esconde placeholder e mostra vídeo
+        self.placeholder_label.hide()
+        self.video_image.show()
         
         # Inicia thread de processamento
         self.processing_thread = threading.Thread(target=self.process_video)
@@ -244,9 +407,17 @@ class WaveControlGUI(Gtk.Window):
         self.is_running = False
         if self.cap:
             self.cap.release()
-        self.start_button.set_label("Iniciar Detecção")
+        self.start_button.set_label("Iniciar")
         self.status_label.set_text("Sistema parado")
+        
+        # Mostra placeholder e esconde vídeo
         self.video_image.clear()
+        self.video_image.hide()
+        self.placeholder_label.show()
+        
+        # Reset dos indicadores
+        self.action_indicator.set_text("neutral")
+        self.filter_label.set_text("Filtro: 0/8")
         
     def process_video(self):
         while self.is_running and self.cap and self.cap.isOpened():
@@ -285,28 +456,27 @@ class WaveControlGUI(Gtk.Window):
             # Calibração inicial
             if now - self.start_ts < CALIBRATION_S:
                 cv2.putText(frame, "Calibrando...", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
-                GLib.idle_add(self.status_label.set_text, "Sistema rodando - Calibrando...")
+                GLib.idle_add(self.status_label.set_text, "Sistema calibrando...")
             else:
                 # Lógica de execução de ações
                 if action == "neutral":
                     if self.action_executed:
                         self.action_executed = False
-                        GLib.idle_add(self.status_label.set_text, "Sistema rodando - Pronto para nova ação")
+                        GLib.idle_add(self.status_label.set_text, "Sistema ativo - Pronto")
                 elif action != "neutral" and not self.action_executed:
                     if action == "next":
                         press_next()
-                        GLib.idle_add(self.status_label.set_text, "Sistema rodando - NEXT executado")
+                        GLib.idle_add(self.status_label.set_text, "Próximo slide executado")
                     elif action == "prev":
                         press_prev()
-                        GLib.idle_add(self.status_label.set_text, "Sistema rodando - PREV executado")
+                        GLib.idle_add(self.status_label.set_text, "Slide anterior executado")
                     self.action_executed = True
                     self.last_action = action
                 elif action != "neutral" and self.action_executed:
-                    GLib.idle_add(self.status_label.set_text, "Sistema rodando - Aguardando posição neutra")
+                    GLib.idle_add(self.status_label.set_text, "Aguardando posição neutra")
             
-            # Atualiza labels de status
-            GLib.idle_add(self.action_label.set_text, f"Ação: {action}")
-            GLib.idle_add(self.gesture_label.set_text, f"Gesto raw: {raw_action}")
+            # Atualiza indicadores de status
+            GLib.idle_add(self.action_indicator.set_text, action)
             GLib.idle_add(self.filter_label.set_text, f"Filtro: {len(gesture_history)}/{GESTURE_WINDOW_SIZE}")
             
             # Converte frame para exibição na GUI
@@ -321,8 +491,20 @@ class WaveControlGUI(Gtk.Window):
                 width * channels
             )
             
-            # Redimensiona para caber na interface
-            pixbuf = pixbuf.scale_simple(640, 480, GdkPixbuf.InterpType.BILINEAR)
+            # Redimensiona mantendo proporção
+            original_width = pixbuf.get_width()
+            original_height = pixbuf.get_height()
+            
+            # Calcula nova dimensão mantendo proporção e limitando altura a 300px
+            if original_height > 300:
+                scale_factor = 300 / original_height
+                new_width = int(original_width * scale_factor)
+                new_height = 300
+            else:
+                new_width = original_width
+                new_height = original_height
+                
+            pixbuf = pixbuf.scale_simple(new_width, new_height, GdkPixbuf.InterpType.BILINEAR)
             GLib.idle_add(self.video_image.set_from_pixbuf, pixbuf)
             
             time.sleep(0.03)  # ~30 FPS
