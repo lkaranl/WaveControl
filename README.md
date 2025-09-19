@@ -45,21 +45,19 @@ echo "uinput" | sudo tee -a /etc/modules
 
 ### Opção 1: AppImage (Recomendado)
 
-1. Baixe o AppImage da seção [Releases](https://github.com/seuusuario/WaveControl/releases) ou gere localmente:
 ```bash
-./build_simple.sh
+# Gerar AppImage portável com todas as dependências
+./build.sh
+
+# Executar (289MB, totalmente autocontido)
+./appimage/WaveControl-x86_64.AppImage
 ```
 
-2. Execute o AppImage:
-```bash
-./WaveControl-x86_64.AppImage
-```
-
-3. Para instalar permanentemente:
+#### Instalação permanente:
 ```bash
 mkdir -p ~/.local/bin
-cp WaveControl-x86_64.AppImage ~/.local/bin/
-chmod +x ~/.local/bin/WaveControl-x86_64.AppImage
+cp appimage/WaveControl-x86_64.AppImage ~/.local/bin/wavecontrol
+chmod +x ~/.local/bin/wavecontrol
 ```
 
 ### Opção 2: Execução direta
@@ -96,11 +94,14 @@ Você pode ajustar algumas configurações no início do arquivo `main.py`:
 Para criar seu próprio AppImage:
 
 ```bash
-# Script simplificado (recomendado)
-./build_simple.sh
+# AppImage portável (recomendado - todas as dependências incluídas)
+./build.sh
 
-# Ou script completo
-./build_appimage.sh
+# Ou scripts alternativos (dentro de appimage/scripts/)
+cd appimage/scripts
+./build_portable.sh  # Versão completa
+./build_simple.sh    # Versão compacta
+./build_appimage.sh  # Versão básica
 ```
 
 O AppImage gerado (`WaveControl-x86_64.AppImage`) é um executável portável que:
@@ -119,12 +120,33 @@ O AppImage gerado (`WaveControl-x86_64.AppImage`) é um executável portável qu
 ## Requisitos
 
 ### Para AppImage
-- Sistema Linux com GTK 3.0+
-- Dependências do sistema: `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-3.0`
-- Dependências Python: `opencv-python`, `mediapipe`, `python-uinput`
+- Sistema Linux com Python3 e GTK 3.0+
+- Dependências mínimas: `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-3.0`
+- Todas as dependências Python estão incluídas no AppImage
 
 ### Para execução direta
 - Python 3.8+
 - Webcam funcional
 - Sistema Linux com suporte a uinput
 - GTK 3.0+
+
+## Estrutura do Projeto
+
+```
+WaveControl/
+├── main.py                     # Aplicação principal
+├── requirements.txt            # Dependências Python
+├── README.md                   # Documentação principal
+├── build.sh                    # Script de conveniência para gerar AppImage
+├── appimage/                   # Tudo relacionado ao AppImage
+│   ├── WaveControl-x86_64.AppImage  # AppImage portável (289MB)
+│   ├── scripts/                # Scripts de build
+│   │   ├── build_portable.sh   # Cria AppImage portável (recomendado)
+│   │   ├── build_simple.sh     # Cria AppImage compacto
+│   │   └── build_appimage.sh   # Script básico
+│   └── docs/                   # Documentação específica do AppImage
+│       ├── APPIMAGE.md         # Documentação técnica
+│       └── PORTABLE_README.md  # Guia de uso do AppImage
+└── tools/                      # Ferramentas de build
+    └── appimagetool-x86_64.AppImage  # Ferramenta para criar AppImages
+```

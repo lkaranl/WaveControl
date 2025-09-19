@@ -14,7 +14,7 @@ mkdir -p WaveControl.AppDir/usr/share/applications
 mkdir -p WaveControl.AppDir/usr/share/icons/hicolor/256x256/apps
 
 # Copiar arquivos principais
-cp main.py WaveControl.AppDir/
+cp ../../main.py WaveControl.AppDir/
 
 # Criar AppRun
 cat > WaveControl.AppDir/AppRun << 'EOF'
@@ -69,23 +69,24 @@ cv2.imwrite('WaveControl.AppDir/wavecontrol.png', icon)
 
 cp WaveControl.AppDir/wavecontrol.png WaveControl.AppDir/usr/share/icons/hicolor/256x256/apps/
 
-# Baixar AppImageTool se necessário
-if [ ! -f "appimagetool-x86_64.AppImage" ]; then
+# Usar AppImageTool da pasta tools
+if [ ! -f "../../tools/appimagetool-x86_64.AppImage" ]; then
     echo "Baixando AppImageTool..."
-    wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-    chmod +x appimagetool-x86_64.AppImage
+    mkdir -p ../../tools
+    wget -q -O ../../tools/appimagetool-x86_64.AppImage https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+    chmod +x ../../tools/appimagetool-x86_64.AppImage
 fi
 
 # Gerar AppImage
 echo "Gerando AppImage..."
-ARCH=x86_64 ./appimagetool-x86_64.AppImage WaveControl.AppDir WaveControl-x86_64.AppImage
+ARCH=x86_64 ../../tools/appimagetool-x86_64.AppImage WaveControl.AppDir ../WaveControl-x86_64.AppImage
 
 echo ""
 echo "=== AppImage criado com sucesso! ==="
-echo "Arquivo: WaveControl-x86_64.AppImage ($(du -h WaveControl-x86_64.AppImage | cut -f1))"
+echo "Arquivo: WaveControl-x86_64.AppImage ($(du -h ../WaveControl-x86_64.AppImage | cut -f1))"
 echo ""
 echo "Para testar:"
-echo "./WaveControl-x86_64.AppImage"
+echo "./appimage/WaveControl-x86_64.AppImage"
 echo ""
 echo "Para instalar:"
 echo "mkdir -p ~/.local/bin"

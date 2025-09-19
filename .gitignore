@@ -129,13 +129,13 @@ dmypy.json
 .pyre/
 
 # AppImage specific files
-appimagetool-*
-WaveControl.AppDir/
+tools/appimagetool-*
+appimage/scripts/WaveControl.AppDir/
 AppDir/
 *.appdir
 
 # Permitir o AppImage principal do projeto
-!WaveControl-x86_64.AppImage
+appimage/WaveControl-x86_64.AppImage
 
 # Build artifacts
 build/
