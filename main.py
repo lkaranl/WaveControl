@@ -143,7 +143,7 @@ def apply_digital_zoom(frame, zoom_level):
 class WaveControlGUI(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self)
-        self.set_default_size(1000, 650)
+        self.set_default_size(1000, 600)
         self.set_position(Gtk.WindowPosition.CENTER)
         
         # Aplicar CSS moderno
@@ -212,7 +212,7 @@ class WaveControlGUI(Gtk.Window):
         }
         
         .video-container {
-            min-height: 320px;
+            min-height: 280px;
             background: alpha(@theme_base_color, 0.8);
         }
         
@@ -352,9 +352,15 @@ class WaveControlGUI(Gtk.Window):
         main_container.pack_start(content_layout, True, True, 0)
         
         # === SIDEBAR ===
+        # Scrolled window para a sidebar
+        sidebar_scroll = Gtk.ScrolledWindow()
+        sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sidebar_scroll.set_min_content_width(300)
+        
         sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         sidebar.get_style_context().add_class("sidebar")
-        content_layout.pack_start(sidebar, False, False, 0)
+        sidebar_scroll.add(sidebar)
+        content_layout.pack_start(sidebar_scroll, False, False, 0)
         
         # Card de Controles
         controls_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
@@ -537,7 +543,7 @@ class WaveControlGUI(Gtk.Window):
         # Container do vídeo
         video_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         video_container.get_style_context().add_class("video-container")
-        video_container.set_size_request(-1, 320)
+        video_container.set_size_request(-1, 280)
         
         self.video_image = Gtk.Image()
         self.video_image.set_halign(Gtk.Align.CENTER)
@@ -709,11 +715,11 @@ class WaveControlGUI(Gtk.Window):
             original_width = pixbuf.get_width()
             original_height = pixbuf.get_height()
             
-            # Calcula nova dimensão mantendo proporção e limitando altura a 300px
-            if original_height > 300:
-                scale_factor = 300 / original_height
+            # Calcula nova dimensão mantendo proporção e limitando altura a 260px
+            if original_height > 260:
+                scale_factor = 260 / original_height
                 new_width = int(original_width * scale_factor)
-                new_height = 300
+                new_height = 260
             else:
                 new_width = original_width
                 new_height = original_height
