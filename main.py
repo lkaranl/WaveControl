@@ -16,6 +16,11 @@ CALIBRATION_S = 2.0     # tempo inicial para estabilizar câmera
 DRAW = True             # mostrar janela com landmarks
 CAM_INDEX = 0           # índice da webcam
 
+# ===== Configurações de Zoom =====
+DEFAULT_ZOOM = 1.0      # zoom padrão (sem zoom)
+MIN_ZOOM = 1.0          # zoom mínimo
+MAX_ZOOM = 4.0          # zoom máximo
+
 # ===== Filtro Temporal =====
 GESTURE_WINDOW_SIZE = 8  # número de frames para confirmar gesto
 CONSISTENCY_THRESHOLD = 0.75  # 75% das amostras devem ser iguais
@@ -109,6 +114,31 @@ def press_home():
 def press_end():
     kb.emit_click(uinput.KEY_END)
 
+def apply_digital_zoom(frame, zoom_level):
+    """Aplica zoom digital no frame"""
+    if zoom_level <= 1.0:
+        return frame
+    
+    height, width = frame.shape[:2]
+    
+    # Calcula o tamanho da região central a ser extraída
+    crop_width = int(width / zoom_level)
+    crop_height = int(height / zoom_level)
+    
+    # Calcula as coordenadas centrais para o crop
+    start_x = (width - crop_width) // 2
+    start_y = (height - crop_height) // 2
+    end_x = start_x + crop_width
+    end_y = start_y + crop_height
+    
+    # Extrai a região central
+    cropped = frame[start_y:end_y, start_x:end_x]
+    
+    # Redimensiona de volta ao tamanho original
+    zoomed = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
+    
+    return zoomed
+
 # ===== Interface Gráfica GTK =====
 class WaveControlGUI(Gtk.Window):
     def __init__(self):
@@ -125,6 +155,7 @@ class WaveControlGUI(Gtk.Window):
         self.start_ts = None
         self.last_action = "neutral"
         self.action_executed = False
+        self.zoom_level = DEFAULT_ZOOM
         
         # Setup da interface
         self.setup_ui()
@@ -262,6 +293,31 @@ class WaveControlGUI(Gtk.Window):
             font-size: 12px;
             opacity: 0.8;
         }
+        
+        .zoom-controls {
+            background: alpha(@theme_selected_bg_color, 0.05);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid alpha(@theme_selected_bg_color, 0.2);
+        }
+        
+        .zoom-label {
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .zoom-buttons {
+            margin-top: 8px;
+        }
+        
+        .zoom-button {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            min-height: 32px;
+            margin: 0 2px;
+        }
         """
         css_provider.load_from_data(css.encode('utf-8'))
         screen = Gdk.Screen.get_default()
@@ -321,6 +377,66 @@ class WaveControlGUI(Gtk.Window):
         controls_card.pack_start(self.start_button, False, False, 0)
         controls_card.pack_start(self.show_landmarks_check, False, False, 0)
         sidebar.pack_start(controls_card, False, False, 0)
+        
+        # Card de Zoom
+        zoom_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        zoom_card.get_style_context().add_class("control-card")
+        
+        zoom_header = Gtk.Label(label="Controle de Zoom")
+        zoom_header.get_style_context().add_class("card-header")
+        zoom_header.set_halign(Gtk.Align.START)
+        
+        # Controles de zoom
+        zoom_controls = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        zoom_controls.get_style_context().add_class("zoom-controls")
+        
+        # Label do zoom atual
+        self.zoom_value_label = Gtk.Label(label=f"Zoom: {DEFAULT_ZOOM:.1f}x")
+        self.zoom_value_label.get_style_context().add_class("zoom-label")
+        self.zoom_value_label.set_halign(Gtk.Align.START)
+        
+        # Slider de zoom
+        zoom_adjustment = Gtk.Adjustment(
+            value=DEFAULT_ZOOM,
+            lower=MIN_ZOOM,
+            upper=MAX_ZOOM,
+            step_increment=0.1,
+            page_increment=0.5,
+            page_size=0
+        )
+        self.zoom_scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL, adjustment=zoom_adjustment)
+        self.zoom_scale.set_digits(1)
+        self.zoom_scale.set_draw_value(False)
+        self.zoom_scale.connect("value-changed", self.on_zoom_changed)
+        
+        # Botões de zoom rápido
+        zoom_buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        zoom_buttons.get_style_context().add_class("zoom-buttons")
+        zoom_buttons.set_halign(Gtk.Align.CENTER)
+        
+        self.zoom_reset_btn = Gtk.Button.new_with_label("1.0x")
+        self.zoom_reset_btn.get_style_context().add_class("zoom-button")
+        self.zoom_reset_btn.connect("clicked", lambda btn: self.set_zoom(1.0))
+        
+        self.zoom_2x_btn = Gtk.Button.new_with_label("2.0x")
+        self.zoom_2x_btn.get_style_context().add_class("zoom-button")
+        self.zoom_2x_btn.connect("clicked", lambda btn: self.set_zoom(2.0))
+        
+        self.zoom_3x_btn = Gtk.Button.new_with_label("3.0x")
+        self.zoom_3x_btn.get_style_context().add_class("zoom-button")
+        self.zoom_3x_btn.connect("clicked", lambda btn: self.set_zoom(3.0))
+        
+        zoom_buttons.pack_start(self.zoom_reset_btn, True, True, 0)
+        zoom_buttons.pack_start(self.zoom_2x_btn, True, True, 0)
+        zoom_buttons.pack_start(self.zoom_3x_btn, True, True, 0)
+        
+        zoom_controls.pack_start(self.zoom_value_label, False, False, 0)
+        zoom_controls.pack_start(self.zoom_scale, False, False, 0)
+        zoom_controls.pack_start(zoom_buttons, False, False, 0)
+        
+        zoom_card.pack_start(zoom_header, False, False, 0)
+        zoom_card.pack_start(zoom_controls, False, False, 0)
+        sidebar.pack_start(zoom_card, False, False, 0)
         
         # Card de Status
         status_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -439,6 +555,15 @@ class WaveControlGUI(Gtk.Window):
         video_preview.pack_start(video_container, True, True, 0)
         main_content.pack_start(video_preview, True, True, 0)
         
+    def on_zoom_changed(self, scale):
+        self.zoom_level = scale.get_value()
+        self.zoom_value_label.set_text(f"Zoom: {self.zoom_level:.1f}x")
+    
+    def set_zoom(self, zoom_value):
+        self.zoom_level = zoom_value
+        self.zoom_scale.set_value(zoom_value)
+        self.zoom_value_label.set_text(f"Zoom: {zoom_value:.1f}x")
+    
     def on_start_clicked(self, button):
         if not self.is_running:
             self.start_detection()
@@ -500,6 +625,10 @@ class WaveControlGUI(Gtk.Window):
                 break
                 
             frame = cv2.flip(frame, 1)
+            
+            # Aplica zoom digital se necessário
+            frame = apply_digital_zoom(frame, self.zoom_level)
+            
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             res = hands.process(rgb)
             
@@ -526,6 +655,11 @@ class WaveControlGUI(Gtk.Window):
                 )
             
             now = time.time()
+            
+            # Informações visuais na tela
+            if self.zoom_level > 1.0:
+                zoom_text = f"Zoom: {self.zoom_level:.1f}x"
+                cv2.putText(frame, zoom_text, (20, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
             
             # Calibração inicial
             if now - self.start_ts < CALIBRATION_S:
