@@ -674,6 +674,9 @@ class WaveControlGUI(Gtk.Window):
         gesture_history.clear()
         
         self.cap = cv2.VideoCapture(CAM_INDEX)
+        # Define resolução da captura
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)   # Largura
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 800)  # Altura
         if not self.cap.isOpened():
             dialog = Gtk.MessageDialog(
                 transient_for=self,
