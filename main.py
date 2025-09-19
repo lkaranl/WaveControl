@@ -396,9 +396,14 @@ class WaveControlGUI(Gtk.Window):
         self.zoom_3x_btn.get_style_context().add_class("secondary-button")
         self.zoom_3x_btn.connect("clicked", lambda btn: self.set_zoom(3.0))
         
+        self.zoom_4x_btn = Gtk.Button.new_with_label("4x")
+        self.zoom_4x_btn.get_style_context().add_class("secondary-button")
+        self.zoom_4x_btn.connect("clicked", lambda btn: self.set_zoom(4.0))
+        
         zoom_buttons_row.pack_start(self.zoom_1x_btn, True, True, 0)
         zoom_buttons_row.pack_start(self.zoom_2x_btn, True, True, 0)
         zoom_buttons_row.pack_start(self.zoom_3x_btn, True, True, 0)
+        zoom_buttons_row.pack_start(self.zoom_4x_btn, True, True, 0)
         
         zoom_inline.pack_start(self.zoom_value_label, False, False, 0)
         zoom_inline.pack_start(self.zoom_scale, False, False, 0)
