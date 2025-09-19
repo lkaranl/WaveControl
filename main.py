@@ -483,7 +483,7 @@ class WaveControlGUI(Gtk.Window):
             "👆 1 → Próximo",
             "✌️ 2 → Anterior",
             "🤟 3 → Início", 
-            "🖐️ 4 → Fim",
+            "🖖 4 → Fim",
             "✊ 0 → Neutro"
         ]
         
