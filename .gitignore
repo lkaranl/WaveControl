@@ -187,3 +187,5 @@ test_*.py
 *_test.py
 
 .venv*
+
+appimage/WaveControl-x86_64.AppImage
