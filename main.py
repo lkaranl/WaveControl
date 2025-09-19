@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 import cv2
 import time
-import math
 import uinput
 import mediapipe as mp
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib, GdkPixbuf, Gdk
 import threading
-import numpy as np
 
 # ===== Configurações =====
 MIN_DET = 0.6
