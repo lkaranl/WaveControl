@@ -427,21 +427,35 @@ class WaveControlGUI(Gtk.Window):
         sidebar_scroll.add(sidebar)
         main_layout.pack_start(sidebar_scroll, False, False, 0)
         
-        # Card de Configurações
-        config_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        config_card.get_style_context().add_class("compact-card")
+        # Card de Gestos Compacto (PRIMEIRO)
+        gestures_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        gestures_card.get_style_context().add_class("compact-card")
         
-        config_title = Gtk.Label(label="Configurações")
-        config_title.get_style_context().add_class("card-title")
-        config_title.set_halign(Gtk.Align.START)
+        gestures_title = Gtk.Label(label="Gestos")
+        gestures_title.get_style_context().add_class("card-title")
+        gestures_title.set_halign(Gtk.Align.START)
         
-        # Checkbox compacto
-        self.show_landmarks_check = Gtk.CheckButton.new_with_label("Mostrar landmarks")
-        self.show_landmarks_check.set_active(DRAW)
+        # Grid de gestos compacto
+        gestures_compact = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        gestures_compact.get_style_context().add_class("gestures-compact")
         
-        config_card.pack_start(config_title, False, False, 0)
-        config_card.pack_start(self.show_landmarks_check, False, False, 0)
-        sidebar.pack_start(config_card, False, False, 0)
+        gestures = [
+            "👆 1 → Próximo",
+            "✌️ 2 → Anterior",
+            "🤟 3 → Início", 
+            "🖖 4 → Fim",
+            "✊ 0 → Neutro"
+        ]
+        
+        for gesture in gestures:
+            gesture_item = Gtk.Label(label=gesture)
+            gesture_item.get_style_context().add_class("gesture-compact")
+            gesture_item.set_halign(Gtk.Align.START)
+            gestures_compact.pack_start(gesture_item, False, False, 0)
+        
+        gestures_card.pack_start(gestures_title, False, False, 0)
+        gestures_card.pack_start(gestures_compact, False, False, 0)
+        sidebar.pack_start(gestures_card, False, False, 0)
         
         # Card de Zoom Compacto
         zoom_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -559,35 +573,21 @@ class WaveControlGUI(Gtk.Window):
         status_card.pack_start(status_grid, False, False, 0)
         sidebar.pack_start(status_card, False, False, 0)
         
-        # Card de Gestos Compacto
-        gestures_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        gestures_card.get_style_context().add_class("compact-card")
+        # Card de Configurações (ÚLTIMO)
+        config_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        config_card.get_style_context().add_class("compact-card")
         
-        gestures_title = Gtk.Label(label="Gestos")
-        gestures_title.get_style_context().add_class("card-title")
-        gestures_title.set_halign(Gtk.Align.START)
+        config_title = Gtk.Label(label="Configurações")
+        config_title.get_style_context().add_class("card-title")
+        config_title.set_halign(Gtk.Align.START)
         
-        # Grid de gestos compacto
-        gestures_compact = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        gestures_compact.get_style_context().add_class("gestures-compact")
+        # Checkbox compacto
+        self.show_landmarks_check = Gtk.CheckButton.new_with_label("Mostrar landmarks")
+        self.show_landmarks_check.set_active(DRAW)
         
-        gestures = [
-            "👆 1 → Próximo",
-            "✌️ 2 → Anterior",
-            "🤟 3 → Início", 
-            "🖖 4 → Fim",
-            "✊ 0 → Neutro"
-        ]
-        
-        for gesture in gestures:
-            gesture_item = Gtk.Label(label=gesture)
-            gesture_item.get_style_context().add_class("gesture-compact")
-            gesture_item.set_halign(Gtk.Align.START)
-            gestures_compact.pack_start(gesture_item, False, False, 0)
-        
-        gestures_card.pack_start(gestures_title, False, False, 0)
-        gestures_card.pack_start(gestures_compact, False, False, 0)
-        sidebar.pack_start(gestures_card, False, False, 0)
+        config_card.pack_start(config_title, False, False, 0)
+        config_card.pack_start(self.show_landmarks_check, False, False, 0)
+        sidebar.pack_start(config_card, False, False, 0)
         
         # === ÁREA PRINCIPAL MAXIMIZADA ===
         main_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
