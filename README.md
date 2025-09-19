@@ -43,7 +43,17 @@ echo "uinput" | sudo tee -a /etc/modules
 
 ## Uso
 
-### Opção 1: AppImage (Recomendado)
+### Opção 1: Flatpak (Recomendado)
+
+```bash
+# Instalar do Flathub (quando disponível)
+flatpak install flathub io.github.lkaranl.WaveControl
+
+# Executar
+flatpak run io.github.lkaranl.WaveControl
+```
+
+### Opção 2: AppImage
 
 ```bash
 # Gerar AppImage portável com todas as dependências
@@ -60,7 +70,7 @@ cp appimage/WaveControl-x86_64.AppImage ~/.local/bin/wavecontrol
 chmod +x ~/.local/bin/wavecontrol
 ```
 
-### Opção 2: Execução direta
+### Opção 3: Execução direta
 
 1. Execute a aplicação:
 ```bash
@@ -137,8 +147,17 @@ WaveControl/
 ├── main.py                     # Aplicação principal
 ├── requirements.txt            # Dependências Python
 ├── README.md                   # Documentação principal
+├── LICENSE                     # Licença MIT
 ├── build.sh                    # Script de conveniência para gerar AppImage
-├── appimage/                   # Tudo relacionado ao AppImage
+├── flatpak/                    # Empacotamento Flatpak
+│   ├── io.github.lkaranl.WaveControl.yml      # Manifesto Flatpak
+│   ├── io.github.lkaranl.WaveControl.desktop  # Arquivo desktop
+│   ├── io.github.lkaranl.WaveControl.metainfo.xml # Metadados AppStream
+│   ├── icon.png                # Ícone da aplicação
+│   ├── build-flatpak.sh        # Script de build local
+│   ├── prepare-flathub.sh      # Script para submissão Flathub
+│   └── README.md               # Documentação do Flatpak
+├── appimage/                   # Empacotamento AppImage
 │   ├── WaveControl-x86_64.AppImage  # AppImage portável (289MB)
 │   ├── scripts/                # Scripts de build
 │   │   ├── build_portable.sh   # Cria AppImage portável (recomendado)

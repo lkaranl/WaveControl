@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=WaveControl
+GenericName=Gesture-based Slide Controller
+Comment=Control presentations using hand gestures captured by webcam
+Icon=io.github.lkaranl.WaveControl
+Exec=wavecontrol
+Categories=Office;Presentation;AudioVideo;
+Terminal=false
+StartupNotify=true
+Keywords=presentation;gesture;slides;webcam;control;

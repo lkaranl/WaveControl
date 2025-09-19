@@ -137,6 +137,12 @@ AppDir/
 # Permitir o AppImage principal do projeto
 appimage/WaveControl-x86_64.AppImage
 
+# Flatpak build artifacts
+flatpak/build-dir/
+flatpak/.flatpak-builder/
+flatpak/repo/
+*.flatpak
+
 # Build artifacts
 build/
 dist/

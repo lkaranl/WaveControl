@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.lkaranl.WaveControl</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  
+  <name>WaveControl</name>
+  <summary>Control presentations using hand gestures</summary>
+  
+  <description>
+    <p>
+      WaveControl allows you to control slide presentations using simple hand gestures 
+      captured by your webcam. No need for keyboards, remote controls, or clickers - 
+      just wave your hand to navigate through your slides.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Gesture-based slide control: 1 finger = next slide, 2 fingers = previous slide</li>
+      <li>Real-time hand detection using MediaPipe AI</li>
+      <li>Modern GTK3 interface with live camera preview</li>
+      <li>Temporal filtering for stable gesture recognition</li>
+      <li>Compatible with any presentation software (PowerPoint, LibreOffice, etc.)</li>
+      <li>Intelligent calibration system</li>
+    </ul>
+    <p>
+      Perfect for presentations, lectures, or any situation where you need hands-free 
+      slide navigation. Simply position your hand in front of the camera and make 
+      gestures to control your presentation.
+    </p>
+  </description>
+  
+  <screenshots>
+    <screenshot type="default">
+      <caption>WaveControl main interface showing camera preview and gesture detection</caption>
+      <image>https://raw.githubusercontent.com/lkaranl/WaveControl/main/screenshot.png</image>
+    </screenshot>
+  </screenshots>
+  
+  <url type="homepage">https://github.com/lkaranl/WaveControl</url>
+  <url type="bugtracker">https://github.com/lkaranl/WaveControl/issues</url>
+  <url type="vcs-browser">https://github.com/lkaranl/WaveControl</url>
+  
+  <developer_name>Seu Nome</developer_name>
+  
+  <launchable type="desktop-id">io.github.lkaranl.WaveControl.desktop</launchable>
+  
+  <provides>
+    <binary>wavecontrol</binary>
+  </provides>
+  
+  <categories>
+    <category>Office</category>
+    <category>Presentation</category>
+  </categories>
+  
+  <keywords>
+    <keyword>presentation</keyword>
+    <keyword>gesture</keyword>
+    <keyword>slides</keyword>
+    <keyword>webcam</keyword>
+    <keyword>control</keyword>
+    <keyword>hand tracking</keyword>
+    <keyword>AI</keyword>
+  </keywords>
+  
+  <content_rating type="oars-1.1" />
+  
+  <releases>
+    <release version="1.0.0" date="2024-09-19">
+      <description>
+        <p>Initial release of WaveControl:</p>
+        <ul>
+          <li>Hand gesture recognition for slide control</li>
+          <li>Modern GTK3 interface</li>
+          <li>Real-time camera preview</li>
+          <li>Temporal filtering for stable gestures</li>
+          <li>Cross-platform Linux support</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>
