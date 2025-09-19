@@ -22,7 +22,7 @@ GESTURE_WINDOW_SIZE = 8  # número de frames para confirmar gesto
 CONSISTENCY_THRESHOLD = 0.75  # 75% das amostras devem ser iguais
 
 # ===== Dispositivo virtual (uinput) =====
-kb = uinput.Device([uinput.KEY_RIGHT, uinput.KEY_LEFT])
+kb = uinput.Device([uinput.KEY_RIGHT, uinput.KEY_LEFT, uinput.KEY_HOME, uinput.KEY_END])
 
 # ===== MediaPipe =====
 mp_hands = mp.solutions.hands
@@ -89,11 +89,13 @@ def get_stable_gesture():
     return "neutral"
 
 # ===== Gesto -> Ação =====
-# 1 dedo levantado: próximo; 2 dedos levantados: anterior; senão: neutro
+# 1 dedo: próximo; 2 dedos: anterior; 3 dedos: início; 4 dedos: fim; senão: neutro
 def classify_gesture(lm, handed_label):
     n = count_extended(lm, handed_label)
     if n == 1: return "next"      # um dedo levantado
     if n == 2: return "prev"      # dois dedos levantados
+    if n == 3: return "home"      # três dedos levantados
+    if n == 4: return "end"       # quatro dedos levantados
     return "neutral"
 
 def press_next():
@@ -101,6 +103,12 @@ def press_next():
 
 def press_prev():
     kb.emit_click(uinput.KEY_LEFT)
+
+def press_home():
+    kb.emit_click(uinput.KEY_HOME)
+
+def press_end():
+    kb.emit_click(uinput.KEY_END)
 
 # ===== Interface Gráfica GTK =====
 class WaveControlGUI(Gtk.Window):
@@ -345,7 +353,9 @@ class WaveControlGUI(Gtk.Window):
         
         instructions = [
             "1 dedo → Próximo slide",
-            "2 dedos → Slide anterior", 
+            "2 dedos → Slide anterior",
+            "3 dedos → Início da apresentação",
+            "4 dedos → Fim da apresentação",
             "Mão fechada → Neutro"
         ]
         
@@ -470,6 +480,12 @@ class WaveControlGUI(Gtk.Window):
                     elif action == "prev":
                         press_prev()
                         GLib.idle_add(self.status_label.set_text, "Slide anterior executado")
+                    elif action == "home":
+                        press_home()
+                        GLib.idle_add(self.status_label.set_text, "Indo para o início")
+                    elif action == "end":
+                        press_end()
+                        GLib.idle_add(self.status_label.set_text, "Indo para o fim")
                     self.action_executed = True
                     self.last_action = action
                 elif action != "neutral" and self.action_executed:
