@@ -171,112 +171,200 @@ class WaveControlGUI(Gtk.Window):
         GLib.idle_add(self.start_detection)
     
     def apply_modern_styling(self):
-        """Aplica estilo minimalista respeitando o tema GTK"""
+        """Aplica estilo harmonioso respeitando o tema GTK"""
         css_provider = Gtk.CssProvider()
         css = """
-        /* Estilos básicos compatíveis com GTK CSS */
-        .header-toolbar {
-            padding: 12px 20px;
+        /* Layout harmonioso com cores do sistema GTK */
+        
+        /* Container principal */
+        .main-container {
             background: @theme_bg_color;
-            border-bottom: 1px solid @borders;
-            min-height: 50px;
+        }
+        
+        /* Header moderno */
+        .header-toolbar {
+            padding: 16px 24px;
+            background: @theme_bg_color;
+            border-bottom: 1px solid alpha(@borders, 0.3);
+            box-shadow: 0 1px 3px alpha(black, 0.1);
+            min-height: 52px;
         }
         
         .app-title {
-            font-size: 18px;
-            font-weight: bold;
+            font-size: 20px;
+            font-weight: 600;
             color: @theme_fg_color;
+            margin-right: 24px;
         }
         
+        /* Sidebar elegante */
         .sidebar {
-            padding: 16px;
-            background: @theme_bg_color;
-            border-right: 1px solid @borders;
+            padding: 20px 16px;
+            background: alpha(@theme_bg_color, 0.95);
+            border-right: 1px solid alpha(@borders, 0.2);
+            box-shadow: 1px 0 3px alpha(black, 0.05);
         }
         
+        /* Área principal responsiva */
         .main-content {
-            padding: 16px;
+            padding: 20px;
             background: @theme_base_color;
         }
         
+        /* Container de vídeo aprimorado */
         .video-area {
-            border-radius: 8px;
-            border: 1px solid @borders;
+            border-radius: 12px;
             background: @theme_base_color;
+            box-shadow: 0 2px 8px alpha(black, 0.1);
         }
         
         .video-container {
             background: black;
+            border-radius: 12px;
+            min-height: 400px;
         }
         
+        .video-placeholder {
+            font-size: 16px;
+            color: alpha(@theme_fg_color, 0.7);
+        }
+        
+        /* Cards harmonioso */
         .compact-card {
             background: @theme_base_color;
-            border: 1px solid @borders;
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 12px;
+            border: 1px solid alpha(@borders, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px alpha(black, 0.05);
+            transition: all 200ms ease;
+        }
+        
+        .compact-card:hover {
+            box-shadow: 0 2px 6px alpha(black, 0.1);
         }
         
         .card-title {
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
             color: @theme_fg_color;
+            border-bottom: 2px solid @theme_selected_bg_color;
+            padding-bottom: 6px;
         }
         
+        /* Botões modernos */
         .primary-button {
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-weight: bold;
-            min-height: 36px;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            min-height: 40px;
+            transition: all 200ms ease;
+        }
+        
+        .primary-button:hover {
+            box-shadow: 0 2px 4px alpha(black, 0.15);
         }
         
         .secondary-button {
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            margin: 2px;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin: 3px;
+            transition: all 150ms ease;
         }
         
+        .secondary-button:hover {
+            background: alpha(@theme_selected_bg_color, 0.1);
+        }
+        
+        /* Indicadores de status aprimorados */
         .status-indicator {
-            padding: 4px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: bold;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
             background: @theme_selected_bg_color;
             color: @theme_selected_fg_color;
+            box-shadow: 0 1px 2px alpha(black, 0.1);
         }
         
         .status-grid {
-            background: @theme_bg_color;
-            border-radius: 4px;
-            padding: 8px;
-            border: 1px solid @borders;
+            background: alpha(@theme_bg_color, 0.5);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid alpha(@borders, 0.15);
         }
         
+        .status-item {
+            margin: 4px 0;
+            padding: 4px 0;
+        }
+        
+        .status-label {
+            font-size: 13px;
+            color: alpha(@theme_fg_color, 0.8);
+        }
+        
+        /* Controles de zoom harmonioso */
         .zoom-inline {
-            background: @theme_bg_color;
-            border-radius: 4px;
-            padding: 8px;
-            border: 1px solid @borders;
+            background: alpha(@theme_bg_color, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid alpha(@borders, 0.15);
         }
         
         .zoom-value {
-            font-size: 11px;
-            font-weight: bold;
-            margin-bottom: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: @theme_selected_bg_color;
         }
         
+        .zoom-buttons-row {
+            margin-top: 8px;
+        }
+        
+        /* Área de gestos */
         .gestures-compact {
-            background: @theme_bg_color;
-            border-radius: 4px;
-            padding: 8px;
-            border: 1px solid @borders;
+            background: alpha(@theme_bg_color, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid alpha(@borders, 0.15);
         }
         
         .gesture-compact {
-            font-size: 11px;
-            padding: 2px 0;
+            font-size: 13px;
+            padding: 4px 0;
+            color: alpha(@theme_fg_color, 0.9);
+        }
+        
+        /* Rodapé minimalista */
+        .footer {
+            background: alpha(@theme_bg_color, 0.8);
+            border-top: 1px solid alpha(@borders, 0.2);
+            padding: 8px 24px;
+        }
+        
+        /* Barra de rolagem personalizada */
+        scrolledwindow {
+            background: transparent;
+        }
+        
+        scrollbar {
+            background: alpha(@theme_bg_color, 0.1);
+            border-radius: 6px;
+        }
+        
+        scrollbar slider {
+            background: alpha(@theme_fg_color, 0.3);
+            border-radius: 6px;
+            min-height: 20px;
+            min-width: 6px;
+        }
+        
+        scrollbar slider:hover {
+            background: alpha(@theme_fg_color, 0.5);
         }
         """
         css_provider.load_from_data(css.encode('utf-8'))
@@ -290,47 +378,51 @@ class WaveControlGUI(Gtk.Window):
         main_container.get_style_context().add_class("main-container")
         self.add(main_container)
         
-        # Header toolbar compacto
-        header_toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        # Header toolbar elegante
+        header_toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         header_toolbar.get_style_context().add_class("header-toolbar")
+        
+        # Seção esquerda do header - título e informações
+        header_left = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         
         # Título da aplicação
         title_label = Gtk.Label(label="WaveControl")
         title_label.get_style_context().add_class("app-title")
         title_label.set_halign(Gtk.Align.START)
         
-        # Controles do toolbar
-        toolbar_controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        toolbar_controls.get_style_context().add_class("toolbar-controls")
+        # Status principal no header (versão compacta)
+        self.header_status = Gtk.Label(label="Parado")
+        self.header_status.get_style_context().add_class("status-indicator")
+        
+        header_left.pack_start(title_label, False, False, 0)
+        header_left.pack_start(self.header_status, False, False, 0)
+        
+        # Seção direita do header - controles
+        header_right = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         
         # Botão principal no header
         self.header_start_button = Gtk.Button.new_with_label("▶ Iniciar")
         self.header_start_button.get_style_context().add_class("primary-button")
         self.header_start_button.connect("clicked", self.on_start_clicked)
         
-        # Status principal no header
-        self.header_status = Gtk.Label(label="Parado")
-        self.header_status.get_style_context().add_class("status-indicator")
+        header_right.pack_start(self.header_start_button, False, False, 0)
         
-        toolbar_controls.pack_start(self.header_status, False, False, 0)
-        toolbar_controls.pack_start(self.header_start_button, False, False, 0)
-        
-        header_toolbar.pack_start(title_label, False, False, 0)
-        header_toolbar.pack_end(toolbar_controls, False, False, 0)
+        header_toolbar.pack_start(header_left, False, False, 0)
+        header_toolbar.pack_end(header_right, False, False, 0)
         main_container.pack_start(header_toolbar, False, False, 0)
         
-        # Layout principal maximizado
+        # Layout principal fluido
         main_layout = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         main_layout.get_style_context().add_class("main-layout")
         main_container.pack_start(main_layout, True, True, 0)
         
-        # === SIDEBAR COMPACTA ===
+        # === SIDEBAR ELEGANTE ===
         sidebar_scroll = Gtk.ScrolledWindow()
         sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         sidebar_scroll.set_min_content_width(280)
         sidebar_scroll.set_max_content_width(320)
         
-        sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         sidebar.get_style_context().add_class("sidebar")
         sidebar_scroll.add(sidebar)
         main_layout.pack_start(sidebar_scroll, False, False, 0)
@@ -495,16 +587,23 @@ class WaveControlGUI(Gtk.Window):
         
         gestures_card.pack_start(gestures_title, False, False, 0)
         gestures_card.pack_start(gestures_compact, False, False, 0)
-        sidebar.pack_start(gestures_card, True, True, 0)
+        sidebar.pack_start(gestures_card, False, False, 0)
         
         # === ÁREA PRINCIPAL MAXIMIZADA ===
         main_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         main_content.get_style_context().add_class("main-content")
         main_layout.pack_start(main_content, True, True, 0)
         
-        # Área de vídeo maximizada
-        video_area = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        # === ÁREA DE VÍDEO PRINCIPAL ===
+        video_area = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         video_area.get_style_context().add_class("video-area")
+        
+        # Container do vídeo com padding harmonioso
+        video_wrapper = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        video_wrapper.set_margin_top(8)
+        video_wrapper.set_margin_bottom(8)
+        video_wrapper.set_margin_left(8)
+        video_wrapper.set_margin_right(8)
         
         # Container do vídeo responsivo
         video_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -514,17 +613,43 @@ class WaveControlGUI(Gtk.Window):
         self.video_image.set_halign(Gtk.Align.CENTER)
         self.video_image.set_valign(Gtk.Align.CENTER)
         
-        # Placeholder moderno
-        self.placeholder_label = Gtk.Label(label="📷 Câmera não ativada\n\nClique em '▶ Iniciar' para começar")
+        # Placeholder elegante
+        placeholder_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        placeholder_box.set_halign(Gtk.Align.CENTER)
+        placeholder_box.set_valign(Gtk.Align.CENTER)
+        
+        # Ícone do placeholder
+        placeholder_icon = Gtk.Label(label="📷")
+        placeholder_icon.set_markup("<span size='48000'>📷</span>")
+        
+        # Texto do placeholder
+        self.placeholder_label = Gtk.Label()
+        self.placeholder_label.set_markup("<span size='large'>Câmera não ativada</span>\n\n<span alpha='70%'>Clique em '▶ Iniciar' para começar</span>")
         self.placeholder_label.get_style_context().add_class("video-placeholder")
-        self.placeholder_label.set_halign(Gtk.Align.CENTER)
-        self.placeholder_label.set_valign(Gtk.Align.CENTER)
+        self.placeholder_label.set_justify(Gtk.Justification.CENTER)
+        
+        placeholder_box.pack_start(placeholder_icon, False, False, 0)
+        placeholder_box.pack_start(self.placeholder_label, False, False, 0)
         
         video_container.pack_start(self.video_image, True, True, 0)
-        video_container.pack_start(self.placeholder_label, True, True, 0)
+        video_container.pack_start(placeholder_box, True, True, 0)
         
-        video_area.pack_start(video_container, True, True, 0)
+        video_wrapper.pack_start(video_container, True, True, 0)
+        video_area.pack_start(video_wrapper, True, True, 0)
         main_content.pack_start(video_area, True, True, 0)
+        
+        # === RODAPÉ ELEGANTE ===
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        footer.get_style_context().add_class("footer")
+        footer.set_size_request(-1, 32)
+        
+        # Informações do rodapé
+        footer_info = Gtk.Label(label="WaveControl - Controle por gestos")
+        footer_info.set_halign(Gtk.Align.START)
+        footer_info.get_style_context().add_class("status-label")
+        
+        footer.pack_start(footer_info, True, True, 0)
+        main_container.pack_end(footer, False, False, 0)
         
     def on_zoom_changed(self, scale):
         self.zoom_level = scale.get_value()
@@ -566,7 +691,7 @@ class WaveControlGUI(Gtk.Window):
         self.status_label.set_text("Sistema calibrando...")
         
         # Esconde placeholder e mostra vídeo
-        self.placeholder_label.hide()
+        self.placeholder_label.get_parent().hide()
         self.video_image.show()
         
         # Inicia thread de processamento
@@ -585,7 +710,7 @@ class WaveControlGUI(Gtk.Window):
         # Mostra placeholder e esconde vídeo
         self.video_image.clear()
         self.video_image.hide()
-        self.placeholder_label.show()
+        self.placeholder_label.get_parent().show()
         
         # Reset dos indicadores
         self.action_indicator.set_text("neutral")
@@ -690,8 +815,8 @@ class WaveControlGUI(Gtk.Window):
             original_height = pixbuf.get_height()
             
             # Calcula nova dimensão responsiva - usa mais espaço disponível
-            max_height = min(600, self.get_allocated_height() - 120)  # Altura dinamica menos header
-            max_width = min(800, self.get_allocated_width() - 350)    # Largura dinamica menos sidebar
+            max_height = min(800, self.get_allocated_height() - 100)  # Altura dinamica menos header e footer
+            max_width = min(1000, self.get_allocated_width() - 300)    # Largura dinamica menos sidebar
             
             # Calcula escala baseada nos limites disponiveis
             scale_height = max_height / original_height if original_height > max_height else 1
