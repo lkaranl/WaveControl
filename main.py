@@ -166,6 +166,9 @@ class WaveControlGUI(Gtk.Window):
         
         # Conecta eventos
         self.connect("destroy", self.on_window_destroy)
+        
+        # Inicia automaticamente
+        GLib.idle_add(self.start_detection)
     
     def apply_modern_styling(self):
         """Aplica estilo minimalista respeitando o tema GTK"""
