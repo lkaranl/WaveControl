@@ -144,7 +144,7 @@ class WaveControlGUI(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self)
         # Configuração inicial da janela
-        self.set_default_size(1200, 700)
+        self.set_default_size(1000, 600)
         self.set_position(Gtk.WindowPosition.CENTER)
         
         # Permite maximizar e redimensionar
