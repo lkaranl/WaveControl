@@ -4,7 +4,6 @@ import time
 import uinput
 import mediapipe as mp
 import gi
-import os
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib, GdkPixbuf, Gdk
 import threading
