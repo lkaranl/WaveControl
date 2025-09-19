@@ -4,6 +4,11 @@ import time
 import math
 import uinput
 import mediapipe as mp
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, GLib, GdkPixbuf, Gdk
+import threading
+import numpy as np
 
 # ===== Configurações =====
 MIN_DET = 0.6
@@ -98,98 +103,242 @@ def press_next():
 def press_prev():
     kb.emit_click(uinput.KEY_LEFT)
 
-# ===== Loop principal =====
-cap = cv2.VideoCapture(CAM_INDEX)
-start_ts = time.time()
-last_action = "neutral"
-action_executed = False  # flag para controlar execução
-
-while cap.isOpened():
-    ok, frame = cap.read()
-    if not ok:
-        break
-
-    frame = cv2.flip(frame, 1)
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    res = hands.process(rgb)
-
-    raw_action = "neutral"
-    handed = "Right"
-
-    if res.multi_hand_landmarks:
-        lm = res.multi_hand_landmarks[0]
-        if res.multi_handedness and len(res.multi_handedness) > 0:
-            handed = res.multi_handedness[0].classification[0].label  # "Left"/"Right"
-        raw_action = classify_gesture(lm.landmark, handed)
-    
-    # Adiciona gesto ao histórico e obtém gesto estável
-    add_gesture_to_history(raw_action)
-    action = get_stable_gesture()
-
-    # Desenha landmarks se mão detectada
-    if res.multi_hand_landmarks and DRAW:
-        lm = res.multi_hand_landmarks[0]
-        mp_drawing.draw_landmarks(
-            frame, lm, mp_hands.HAND_CONNECTIONS,
-            mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2),
-            mp_drawing.DrawingSpec(color=(255,0,0), thickness=2)
+# ===== Interface Gráfica GTK =====
+class WaveControlGUI(Gtk.Window):
+    def __init__(self):
+        Gtk.Window.__init__(self, title="WaveControl - Controle por Gestos")
+        self.set_default_size(800, 600)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        
+        # Variáveis de controle
+        self.is_running = False
+        self.cap = None
+        self.start_ts = None
+        self.last_action = "neutral"
+        self.action_executed = False
+        
+        # Setup da interface
+        self.setup_ui()
+        
+        # Conecta eventos
+        self.connect("destroy", self.on_window_destroy)
+        
+    def setup_ui(self):
+        # Container principal
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        main_box.set_margin_left(20)
+        main_box.set_margin_right(20)
+        main_box.set_margin_top(20)
+        main_box.set_margin_bottom(20)
+        self.add(main_box)
+        
+        # Título
+        title_label = Gtk.Label()
+        title_label.set_markup("<big><b>WaveControl - Controle de Slides por Gestos</b></big>")
+        main_box.pack_start(title_label, False, False, 0)
+        
+        # Área de vídeo
+        self.video_frame = Gtk.Frame()
+        self.video_frame.set_label("Visualização da Câmera")
+        self.video_image = Gtk.Image()
+        self.video_image.set_size_request(640, 480)
+        self.video_frame.add(self.video_image)
+        main_box.pack_start(self.video_frame, True, True, 0)
+        
+        # Painel de controles
+        controls_frame = Gtk.Frame()
+        controls_frame.set_label("Controles")
+        controls_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        controls_box.set_margin_left(10)
+        controls_box.set_margin_right(10)
+        controls_box.set_margin_top(10)
+        controls_box.set_margin_bottom(10)
+        
+        # Botão iniciar/parar
+        self.start_button = Gtk.Button.new_with_label("Iniciar Detecção")
+        self.start_button.connect("clicked", self.on_start_clicked)
+        controls_box.pack_start(self.start_button, False, False, 0)
+        
+        # Checkbox para mostrar landmarks
+        self.show_landmarks_check = Gtk.CheckButton.new_with_label("Mostrar Landmarks")
+        self.show_landmarks_check.set_active(DRAW)
+        controls_box.pack_start(self.show_landmarks_check, False, False, 0)
+        
+        controls_frame.add(controls_box)
+        main_box.pack_start(controls_frame, False, False, 0)
+        
+        # Painel de status
+        status_frame = Gtk.Frame()
+        status_frame.set_label("Status")
+        status_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        status_box.set_margin_left(10)
+        status_box.set_margin_right(10)
+        status_box.set_margin_top(10)
+        status_box.set_margin_bottom(10)
+        
+        self.status_label = Gtk.Label("Sistema parado")
+        self.action_label = Gtk.Label("Ação: neutral")
+        self.gesture_label = Gtk.Label("Gesto: neutral")
+        self.filter_label = Gtk.Label("Filtro: 0/8")
+        
+        status_box.pack_start(self.status_label, False, False, 0)
+        status_box.pack_start(self.action_label, False, False, 0)
+        status_box.pack_start(self.gesture_label, False, False, 0)
+        status_box.pack_start(self.filter_label, False, False, 0)
+        
+        status_frame.add(status_box)
+        main_box.pack_start(status_frame, False, False, 0)
+        
+        # Informações
+        info_frame = Gtk.Frame()
+        info_frame.set_label("Instruções")
+        info_label = Gtk.Label()
+        info_label.set_markup(
+            "<b>Como usar:</b>\n"
+            "• <b>1 dedo levantado:</b> Próximo slide (tecla →)\n"
+            "• <b>2 dedos levantados:</b> Slide anterior (tecla ←)\n"
+            "• <b>Feche a mão:</b> Posição neutra (sem ação)\n\n"
+            "<i>O sistema aguarda você retornar à posição neutra antes de executar a próxima ação.</i>"
         )
-
-    now = time.time()
-
-    # Calibração inicial
-    if now - start_ts < CALIBRATION_S:
-        if DRAW:
-            cv2.putText(frame, "Calibrando...", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
-    else:
-        # Nova lógica: executa ação e aguarda neutral
-        if action == "neutral":
-            # Reset: permite nova ação quando volta ao neutral
-            if action_executed:
-                print(f"[DEBUG] Neutral detectado - permitindo nova ação")
-                action_executed = False
-        elif action != "neutral" and not action_executed:
-            # Executa ação apenas se não foi executada ainda
-            if action == "next":
-                press_next()
-                print(f"[DEBUG] NEXT executado - aguardando neutral")
-            elif action == "prev":
-                press_prev()
-                print(f"[DEBUG] PREV executado - aguardando neutral")
-            action_executed = True
-            last_action = action
-        elif action != "neutral" and action_executed:
-            # Bloqueia ação até retornar ao neutral
-            print(f"[DEBUG] Ação bloqueada - aguardando neutral (current: {action})")
-
-    if DRAW:
-        cv2.putText(frame, f"1 dedo: NEXT | 2 dedos: PREV", (20,80),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200,200,200), 2)
-        cv2.putText(frame, f"Acao: {action}", (20,120),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,200,255), 2)
+        info_label.set_line_wrap(True)
+        info_label.set_margin_left(10)
+        info_label.set_margin_right(10)
+        info_label.set_margin_top(10)
+        info_label.set_margin_bottom(10)
+        info_frame.add(info_label)
+        main_box.pack_start(info_frame, False, False, 0)
         
-        # Info do filtro temporal
-        history_size = len(gesture_history)
-        cv2.putText(frame, f"Filtro: {history_size}/{GESTURE_WINDOW_SIZE}", (20,160),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,0), 2)
-        if history_size > 0:
-            cv2.putText(frame, f"Raw: {raw_action}", (20,190),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100,100,255), 2)
+    def on_start_clicked(self, button):
+        if not self.is_running:
+            self.start_detection()
+        else:
+            self.stop_detection()
+            
+    def start_detection(self):
+        global gesture_history
+        gesture_history.clear()
         
-        # Info de debug
-        cv2.putText(frame, f"Last: {last_action}", (20,220),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,100,100), 2)
-        status = "BLOQUEADO" if action_executed else "PRONTO"
-        color = (0,100,255) if action_executed else (0,255,100)
-        cv2.putText(frame, f"Status: {status}", (20,250),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        self.cap = cv2.VideoCapture(CAM_INDEX)
+        if not self.cap.isOpened():
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Erro ao acessar a câmera"
+            )
+            dialog.format_secondary_text("Verifique se a câmera está conectada e não está sendo usada por outro aplicativo.")
+            dialog.run()
+            dialog.destroy()
+            return
+            
+        self.is_running = True
+        self.start_ts = time.time()
+        self.start_button.set_label("Parar Detecção")
+        self.status_label.set_text("Sistema rodando - Calibrando...")
         
-        cv2.imshow("Slide Controller", frame)
+        # Inicia thread de processamento
+        self.processing_thread = threading.Thread(target=self.process_video)
+        self.processing_thread.daemon = True
+        self.processing_thread.start()
+        
+    def stop_detection(self):
+        self.is_running = False
+        if self.cap:
+            self.cap.release()
+        self.start_button.set_label("Iniciar Detecção")
+        self.status_label.set_text("Sistema parado")
+        self.video_image.clear()
+        
+    def process_video(self):
+        while self.is_running and self.cap and self.cap.isOpened():
+            ok, frame = self.cap.read()
+            if not ok:
+                break
+                
+            frame = cv2.flip(frame, 1)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            res = hands.process(rgb)
+            
+            raw_action = "neutral"
+            handed = "Right"
+            
+            if res.multi_hand_landmarks:
+                lm = res.multi_hand_landmarks[0]
+                if res.multi_handedness and len(res.multi_handedness) > 0:
+                    handed = res.multi_handedness[0].classification[0].label
+                raw_action = classify_gesture(lm.landmark, handed)
+            
+            # Adiciona gesto ao histórico e obtém gesto estável
+            add_gesture_to_history(raw_action)
+            action = get_stable_gesture()
+            
+            # Desenha landmarks se habilitado
+            if res.multi_hand_landmarks and self.show_landmarks_check.get_active():
+                lm = res.multi_hand_landmarks[0]
+                mp_drawing.draw_landmarks(
+                    frame, lm, mp_hands.HAND_CONNECTIONS,
+                    mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2),
+                    mp_drawing.DrawingSpec(color=(255,0,0), thickness=2)
+                )
+            
+            now = time.time()
+            
+            # Calibração inicial
+            if now - self.start_ts < CALIBRATION_S:
+                cv2.putText(frame, "Calibrando...", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
+                GLib.idle_add(self.status_label.set_text, "Sistema rodando - Calibrando...")
+            else:
+                # Lógica de execução de ações
+                if action == "neutral":
+                    if self.action_executed:
+                        self.action_executed = False
+                        GLib.idle_add(self.status_label.set_text, "Sistema rodando - Pronto para nova ação")
+                elif action != "neutral" and not self.action_executed:
+                    if action == "next":
+                        press_next()
+                        GLib.idle_add(self.status_label.set_text, "Sistema rodando - NEXT executado")
+                    elif action == "prev":
+                        press_prev()
+                        GLib.idle_add(self.status_label.set_text, "Sistema rodando - PREV executado")
+                    self.action_executed = True
+                    self.last_action = action
+                elif action != "neutral" and self.action_executed:
+                    GLib.idle_add(self.status_label.set_text, "Sistema rodando - Aguardando posição neutra")
+            
+            # Atualiza labels de status
+            GLib.idle_add(self.action_label.set_text, f"Ação: {action}")
+            GLib.idle_add(self.gesture_label.set_text, f"Gesto raw: {raw_action}")
+            GLib.idle_add(self.filter_label.set_text, f"Filtro: {len(gesture_history)}/{GESTURE_WINDOW_SIZE}")
+            
+            # Converte frame para exibição na GUI
+            height, width, channels = frame.shape
+            pixbuf = GdkPixbuf.Pixbuf.new_from_data(
+                frame.tobytes(),
+                GdkPixbuf.Colorspace.RGB,
+                False,
+                8,
+                width,
+                height,
+                width * channels
+            )
+            
+            # Redimensiona para caber na interface
+            pixbuf = pixbuf.scale_simple(640, 480, GdkPixbuf.InterpType.BILINEAR)
+            GLib.idle_add(self.video_image.set_from_pixbuf, pixbuf)
+            
+            time.sleep(0.03)  # ~30 FPS
+            
+    def on_window_destroy(self, window):
+        self.stop_detection()
+        hands.close()
+        Gtk.main_quit()
 
-    key = cv2.waitKey(1) & 0xFF
-    if key == 27:  # ESC
-        break
+# ===== Execução Principal =====
+def main():
+    app = WaveControlGUI()
+    app.show_all()
+    Gtk.main()
 
-cap.release()
-cv2.destroyAllWindows()
-hands.close()
+if __name__ == "__main__":
+    main()
