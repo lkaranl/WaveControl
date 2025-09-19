@@ -8,8 +8,18 @@ cd appimage/scripts
 ./build_portable.sh
 cd ../..
 
-echo ""
-echo "✅ AppImage criado em: ./appimage/WaveControl-x86_64.AppImage"
-echo ""
-echo "Para executar:"
-echo "./appimage/WaveControl-x86_64.AppImage"
+# Verificar se o AppImage foi realmente criado
+if [ -f "appimage/WaveControl-x86_64.AppImage" ]; then
+    echo ""
+    echo "✅ AppImage criado com sucesso!"
+    echo "📦 Localização: ./appimage/WaveControl-x86_64.AppImage"
+    echo "📏 Tamanho: $(du -h appimage/WaveControl-x86_64.AppImage | cut -f1)"
+    echo ""
+    echo "Para executar:"
+    echo "./appimage/WaveControl-x86_64.AppImage"
+else
+    echo ""
+    echo "❌ Erro: AppImage não foi encontrado!"
+    echo "Verifique se o build foi executado corretamente."
+    exit 1
+fi
