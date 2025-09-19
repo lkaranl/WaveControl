@@ -193,17 +193,17 @@ cv2.imwrite('WaveControl.AppDir/wavecontrol.png', icon)
 
 cp WaveControl.AppDir/wavecontrol.png WaveControl.AppDir/usr/share/icons/hicolor/256x256/apps/
 
-# Usar AppImageTool da pasta tools
-if [ ! -f "../../tools/appimagetool-x86_64.AppImage" ]; then
+# Usar AppImageTool da pasta appimage/tools
+if [ ! -f "../tools/appimagetool-x86_64.AppImage" ]; then
     echo "Baixando AppImageTool..."
-    mkdir -p ../../tools
-    wget -q -O ../../tools/appimagetool-x86_64.AppImage https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-    chmod +x ../../tools/appimagetool-x86_64.AppImage
+    mkdir -p ../tools
+    wget -q -O ../tools/appimagetool-x86_64.AppImage https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+    chmod +x ../tools/appimagetool-x86_64.AppImage
 fi
 
 echo ""
 echo "Gerando AppImage portável..."
-ARCH=x86_64 ../../tools/appimagetool-x86_64.AppImage WaveControl.AppDir ../WaveControl-x86_64.AppImage
+ARCH=x86_64 ../tools/appimagetool-x86_64.AppImage WaveControl.AppDir ../WaveControl-x86_64.AppImage
 
 # Mostrar informações
 echo ""
