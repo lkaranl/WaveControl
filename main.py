@@ -114,7 +114,7 @@ def press_end():
 class WaveControlGUI(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self)
-        self.set_default_size(850, 600)
+        self.set_default_size(1000, 650)
         self.set_position(Gtk.WindowPosition.CENTER)
         
         # Aplicar CSS moderno
@@ -137,93 +137,131 @@ class WaveControlGUI(Gtk.Window):
         """Aplica estilo minimalista respeitando o tema GTK"""
         css_provider = Gtk.CssProvider()
         css = """
-        /* Layout minimalista usando cores do tema */
+        /* Layout moderno com sidebar */
         .main-container {
-            margin: 12px;
+            margin: 0;
         }
         
-        .header-section {
-            padding: 16px 20px;
-            margin-bottom: 8px;
-            border-bottom: 1px solid alpha(@borders, 0.3);
+        .header-bar {
+            padding: 20px 24px;
+            background: alpha(@theme_selected_bg_color, 0.1);
+            border-bottom: 1px solid alpha(@borders, 0.2);
         }
         
         .app-title {
-            font-size: 20px;
-            font-weight: 500;
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 4px;
         }
         
         .app-subtitle {
-            font-size: 13px;
+            font-size: 14px;
             opacity: 0.7;
-            margin-top: 2px;
         }
         
-        .content-section {
-            margin: 8px 0;
+        .content-layout {
+            background: @theme_base_color;
         }
         
-        .video-area {
-            border-radius: 8px;
-            border: 1px solid alpha(@borders, 0.2);
-            padding: 12px;
-            margin: 8px;
+        .sidebar {
+            min-width: 300px;
+            padding: 24px 20px;
+            background: alpha(@theme_base_color, 0.5);
+            border-right: 1px solid alpha(@borders, 0.2);
+        }
+        
+        .main-content {
+            padding: 24px;
+            background: @theme_base_color;
+        }
+        
+        .video-preview {
+            border-radius: 12px;
+            border: 1px solid alpha(@borders, 0.3);
+            background: alpha(@borders, 0.05);
         }
         
         .video-container {
-            border-radius: 6px;
-            border: 2px dashed alpha(@borders, 0.4);
-            min-height: 300px;
-            background: alpha(@theme_base_color, 0.3);
+            min-height: 320px;
+            background: alpha(@theme_base_color, 0.8);
         }
         
-        .controls-section {
-            margin: 8px;
-            padding: 16px;
-            border-radius: 8px;
+        .video-placeholder {
+            color: alpha(@theme_fg_color, 0.5);
+            font-size: 16px;
+        }
+        
+        .control-card {
+            background: @theme_base_color;
             border: 1px solid alpha(@borders, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px alpha(@borders, 0.1);
         }
         
-        .section-title {
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 12px;
-            opacity: 0.9;
+        .card-header {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: @theme_fg_color;
         }
         
         .primary-button {
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-weight: 500;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            min-height: 44px;
         }
         
-        .status-indicator {
-            padding: 4px 8px;
-            border-radius: 4px;
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
             font-size: 12px;
-            font-family: monospace;
-            background: alpha(@theme_selected_bg_color, 0.1);
+            font-weight: 500;
+            background: alpha(@theme_selected_bg_color, 0.15);
             color: @theme_selected_bg_color;
+            border: 1px solid alpha(@theme_selected_bg_color, 0.3);
         }
         
-        .info-section {
-            margin: 8px;
-            padding: 12px;
-            border-radius: 6px;
+        .gesture-grid {
             background: alpha(@theme_selected_bg_color, 0.05);
-            border-left: 3px solid alpha(@theme_selected_bg_color, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid alpha(@theme_selected_bg_color, 0.2);
         }
         
-        .instruction-text {
+        .gesture-item {
+            padding: 8px 0;
+            border-bottom: 1px solid alpha(@borders, 0.1);
             font-size: 13px;
-            margin: 4px 0;
+        }
+        
+        .gesture-item:last-child {
+            border-bottom: none;
+        }
+        
+        .status-row {
+            padding: 8px 0;
+        }
+        
+        .status-label {
+            font-size: 13px;
+            opacity: 0.8;
+        }
+        
+        .tip-box {
+            background: alpha(@theme_selected_bg_color, 0.08);
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 16px;
+            border-left: 3px solid alpha(@theme_selected_bg_color, 0.4);
         }
         
         .tip-text {
             font-size: 12px;
-            font-style: italic;
-            opacity: 0.7;
-            margin-top: 8px;
+            opacity: 0.8;
         }
         """
         css_provider.load_from_data(css.encode('utf-8'))
@@ -237,143 +275,170 @@ class WaveControlGUI(Gtk.Window):
         main_container.get_style_context().add_class("main-container")
         self.add(main_container)
         
-        # Header minimalista
-        header_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        header_section.get_style_context().add_class("header-section")
+        # Header moderno
+        header_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        header_bar.get_style_context().add_class("header-bar")
         
         title_label = Gtk.Label(label="WaveControl")
         title_label.get_style_context().add_class("app-title")
         title_label.set_halign(Gtk.Align.START)
         
-        subtitle_label = Gtk.Label(label="Controle de slides por gestos")
+        subtitle_label = Gtk.Label(label="Controle inteligente de apresentações")
         subtitle_label.get_style_context().add_class("app-subtitle")
         subtitle_label.set_halign(Gtk.Align.START)
         
-        header_section.pack_start(title_label, False, False, 0)
-        header_section.pack_start(subtitle_label, False, False, 0)
-        main_container.pack_start(header_section, False, False, 0)
+        header_bar.pack_start(title_label, False, False, 0)
+        header_bar.pack_start(subtitle_label, False, False, 0)
+        main_container.pack_start(header_bar, False, False, 0)
         
-        # Área de vídeo
-        video_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        video_section.get_style_context().add_class("video-area")
+        # Layout principal com sidebar
+        content_layout = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        content_layout.get_style_context().add_class("content-layout")
+        main_container.pack_start(content_layout, True, True, 0)
         
-        video_title = Gtk.Label(label="Visualização")
-        video_title.get_style_context().add_class("section-title")
-        video_title.set_halign(Gtk.Align.START)
+        # === SIDEBAR ===
+        sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        sidebar.get_style_context().add_class("sidebar")
+        content_layout.pack_start(sidebar, False, False, 0)
+        
+        # Card de Controles
+        controls_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        controls_card.get_style_context().add_class("control-card")
+        
+        controls_header = Gtk.Label(label="Controles")
+        controls_header.get_style_context().add_class("card-header")
+        controls_header.set_halign(Gtk.Align.START)
+        
+        # Botão principal moderno
+        self.start_button = Gtk.Button.new_with_label("Iniciar Detecção")
+        self.start_button.get_style_context().add_class("primary-button")
+        self.start_button.connect("clicked", self.on_start_clicked)
+        
+        # Checkbox modernizado
+        self.show_landmarks_check = Gtk.CheckButton.new_with_label("Exibir landmarks da mão")
+        self.show_landmarks_check.set_active(DRAW)
+        
+        controls_card.pack_start(controls_header, False, False, 0)
+        controls_card.pack_start(self.start_button, False, False, 0)
+        controls_card.pack_start(self.show_landmarks_check, False, False, 0)
+        sidebar.pack_start(controls_card, False, False, 0)
+        
+        # Card de Status
+        status_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        status_card.get_style_context().add_class("control-card")
+        
+        status_header = Gtk.Label(label="Status do Sistema")
+        status_header.get_style_context().add_class("card-header")
+        status_header.set_halign(Gtk.Align.START)
+        
+        # Status principal
+        self.status_label = Gtk.Label(label="Sistema parado")
+        self.status_label.set_halign(Gtk.Align.START)
+        
+        # Status da ação atual
+        action_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        action_row.get_style_context().add_class("status-row")
+        
+        action_label = Gtk.Label(label="Ação atual:")
+        action_label.get_style_context().add_class("status-label")
+        
+        self.action_indicator = Gtk.Label(label="neutral")
+        self.action_indicator.get_style_context().add_class("status-badge")
+        
+        action_row.pack_start(action_label, False, False, 0)
+        action_row.pack_end(self.action_indicator, False, False, 0)
+        
+        # Filtro temporal
+        filter_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        filter_row.get_style_context().add_class("status-row")
+        
+        filter_label = Gtk.Label(label="Filtro temporal:")
+        filter_label.get_style_context().add_class("status-label")
+        
+        self.filter_label = Gtk.Label(label="0/8")
+        self.filter_label.get_style_context().add_class("status-badge")
+        
+        filter_row.pack_start(filter_label, False, False, 0)
+        filter_row.pack_end(self.filter_label, False, False, 0)
+        
+        status_card.pack_start(status_header, False, False, 0)
+        status_card.pack_start(self.status_label, False, False, 0)
+        status_card.pack_start(action_row, False, False, 0)
+        status_card.pack_start(filter_row, False, False, 0)
+        sidebar.pack_start(status_card, False, False, 0)
+        
+        # Card de Gestos
+        gestures_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        gestures_card.get_style_context().add_class("control-card")
+        
+        gestures_header = Gtk.Label(label="Gestos Disponíveis")
+        gestures_header.get_style_context().add_class("card-header")
+        gestures_header.set_halign(Gtk.Align.START)
+        
+        # Grid de gestos
+        gesture_grid = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        gesture_grid.get_style_context().add_class("gesture-grid")
+        
+        gestures = [
+            "👆 1 dedo → Próximo slide",
+            "✌️ 2 dedos → Slide anterior",
+            "🤟 3 dedos → Início da apresentação", 
+            "🖐️ 4 dedos → Fim da apresentação",
+            "✊ Mão fechada → Neutro"
+        ]
+        
+        for gesture in gestures:
+            gesture_item = Gtk.Label(label=gesture)
+            gesture_item.get_style_context().add_class("gesture-item")
+            gesture_item.set_halign(Gtk.Align.START)
+            gesture_grid.pack_start(gesture_item, False, False, 0)
+        
+        # Dica
+        tip_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        tip_box.get_style_context().add_class("tip-box")
+        
+        tip_text = Gtk.Label(label="💡 Mantenha a mão visível na câmera e retorne à posição neutra entre os gestos para melhor detecção.")
+        tip_text.get_style_context().add_class("tip-text")
+        tip_text.set_line_wrap(True)
+        tip_text.set_max_width_chars(35)
+        tip_text.set_halign(Gtk.Align.START)
+        
+        tip_box.pack_start(tip_text, False, False, 0)
+        
+        gestures_card.pack_start(gestures_header, False, False, 0)
+        gestures_card.pack_start(gesture_grid, False, False, 0)
+        gestures_card.pack_start(tip_box, False, False, 0)
+        sidebar.pack_start(gestures_card, True, True, 0)
+        
+        # === ÁREA PRINCIPAL ===
+        main_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        main_content.get_style_context().add_class("main-content")
+        content_layout.pack_start(main_content, True, True, 0)
+        
+        # Preview da câmera
+        video_preview = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        video_preview.get_style_context().add_class("video-preview")
         
         # Container do vídeo
         video_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         video_container.get_style_context().add_class("video-container")
-        video_container.set_size_request(-1, 300)
+        video_container.set_size_request(-1, 320)
         
         self.video_image = Gtk.Image()
         self.video_image.set_halign(Gtk.Align.CENTER)
         self.video_image.set_valign(Gtk.Align.CENTER)
         
-        # Placeholder simples
-        self.placeholder_label = Gtk.Label(label="Câmera desativada\nClique em 'Iniciar' para começar")
+        # Placeholder elegante
+        self.placeholder_label = Gtk.Label(label="Câmera não ativada\n\nClique em 'Iniciar Detecção' para começar")
+        self.placeholder_label.get_style_context().add_class("video-placeholder")
         self.placeholder_label.set_halign(Gtk.Align.CENTER)
         self.placeholder_label.set_valign(Gtk.Align.CENTER)
-        self.placeholder_label.set_opacity(0.6)
         
         video_container.pack_start(self.video_image, True, True, 0)
         video_container.pack_start(self.placeholder_label, True, True, 0)
         
-        video_section.pack_start(video_title, False, False, 0)
-        video_section.pack_start(video_container, True, True, 0)
-        main_container.pack_start(video_section, True, True, 0)
-        
-        # Layout horizontal para controles e status
-        horizontal_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        main_container.pack_start(horizontal_container, False, False, 0)
-        
-        # Seção de controles
-        controls_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        controls_section.get_style_context().add_class("controls-section")
-        controls_section.set_size_request(240, -1)
-        
-        controls_title = Gtk.Label(label="Controles")
-        controls_title.get_style_context().add_class("section-title")
-        controls_title.set_halign(Gtk.Align.START)
-        
-        # Botão principal
-        self.start_button = Gtk.Button.new_with_label("Iniciar")
-        self.start_button.get_style_context().add_class("primary-button")
-        self.start_button.connect("clicked", self.on_start_clicked)
-        
-        # Checkbox
-        self.show_landmarks_check = Gtk.CheckButton.new_with_label("Mostrar landmarks")
-        self.show_landmarks_check.set_active(DRAW)
-        
-        controls_section.pack_start(controls_title, False, False, 0)
-        controls_section.pack_start(self.start_button, False, False, 0)
-        controls_section.pack_start(self.show_landmarks_check, False, False, 0)
-        horizontal_container.pack_start(controls_section, False, False, 0)
-        
-        # Seção de status
-        status_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        status_section.get_style_context().add_class("controls-section")
-        
-        status_title = Gtk.Label(label="Status")
-        status_title.get_style_context().add_class("section-title")
-        status_title.set_halign(Gtk.Align.START)
-        
-        self.status_label = Gtk.Label(label="Sistema parado")
-        self.status_label.set_halign(Gtk.Align.START)
-        
-        # Container para ação atual
-        action_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        action_label = Gtk.Label(label="Ação:")
-        action_label.set_halign(Gtk.Align.START)
-        
-        self.action_indicator = Gtk.Label(label="neutral")
-        self.action_indicator.get_style_context().add_class("status-indicator")
-        
-        action_container.pack_start(action_label, False, False, 0)
-        action_container.pack_start(self.action_indicator, False, False, 0)
-        
-        # Filtro
-        self.filter_label = Gtk.Label(label="Filtro: 0/8")
-        self.filter_label.set_halign(Gtk.Align.START)
-        self.filter_label.set_opacity(0.7)
-        
-        status_section.pack_start(status_title, False, False, 0)
-        status_section.pack_start(self.status_label, False, False, 0)
-        status_section.pack_start(action_container, False, False, 0)
-        status_section.pack_start(self.filter_label, False, False, 0)
-        horizontal_container.pack_start(status_section, True, True, 0)
-        
-        # Seção de informações
-        info_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        info_section.get_style_context().add_class("info-section")
-        
-        info_title = Gtk.Label(label="Instruções")
-        info_title.get_style_context().add_class("section-title")
-        info_title.set_halign(Gtk.Align.START)
-        
-        instructions = [
-            "1 dedo → Próximo slide",
-            "2 dedos → Slide anterior",
-            "3 dedos → Início da apresentação",
-            "4 dedos → Fim da apresentação",
-            "Mão fechada → Neutro"
-        ]
-        
-        for instruction in instructions:
-            label = Gtk.Label(label=instruction)
-            label.get_style_context().add_class("instruction-text")
-            label.set_halign(Gtk.Align.START)
-            info_section.pack_start(label, False, False, 0)
-        
-        tip_label = Gtk.Label(label="Retorne à posição neutra antes da próxima ação")
-        tip_label.get_style_context().add_class("tip-text")
-        tip_label.set_halign(Gtk.Align.START)
-        tip_label.set_line_wrap(True)
-        tip_label.set_max_width_chars(40)
-        
-        info_section.pack_start(info_title, False, False, 0)
-        info_section.pack_start(tip_label, False, False, 8)
-        main_container.pack_start(info_section, False, False, 0)
+        video_preview.pack_start(video_container, True, True, 0)
+        main_content.pack_start(video_preview, True, True, 0)
         
     def on_start_clicked(self, button):
         if not self.is_running:
@@ -401,7 +466,7 @@ class WaveControlGUI(Gtk.Window):
             
         self.is_running = True
         self.start_ts = time.time()
-        self.start_button.set_label("Parar")
+        self.start_button.set_label("Parar Detecção")
         self.status_label.set_text("Sistema calibrando...")
         
         # Esconde placeholder e mostra vídeo
@@ -417,7 +482,7 @@ class WaveControlGUI(Gtk.Window):
         self.is_running = False
         if self.cap:
             self.cap.release()
-        self.start_button.set_label("Iniciar")
+        self.start_button.set_label("Iniciar Detecção")
         self.status_label.set_text("Sistema parado")
         
         # Mostra placeholder e esconde vídeo
@@ -427,7 +492,7 @@ class WaveControlGUI(Gtk.Window):
         
         # Reset dos indicadores
         self.action_indicator.set_text("neutral")
-        self.filter_label.set_text("Filtro: 0/8")
+        self.filter_label.set_text("0/8")
         
     def process_video(self):
         while self.is_running and self.cap and self.cap.isOpened():
@@ -493,7 +558,7 @@ class WaveControlGUI(Gtk.Window):
             
             # Atualiza indicadores de status
             GLib.idle_add(self.action_indicator.set_text, action)
-            GLib.idle_add(self.filter_label.set_text, f"Filtro: {len(gesture_history)}/{GESTURE_WINDOW_SIZE}")
+            GLib.idle_add(self.filter_label.set_text, f"{len(gesture_history)}/{GESTURE_WINDOW_SIZE}")
             
             # Converte frame para exibição na GUI
             height, width, channels = frame.shape
