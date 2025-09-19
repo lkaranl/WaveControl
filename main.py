@@ -209,6 +209,7 @@ class WaveControlGUI(Gtk.Window):
         .main-content {
             padding: 20px;
             background: @theme_base_color;
+            margin-right: 20px;
         }
         
         /* Container de vídeo aprimorado */
@@ -259,6 +260,7 @@ class WaveControlGUI(Gtk.Window):
             border-radius: 6px;
             font-weight: 600;
             min-height: 40px;
+            min-width: 100px;
             transition: all 200ms ease;
         }
         
@@ -269,7 +271,7 @@ class WaveControlGUI(Gtk.Window):
         .secondary-button {
             padding: 8px 14px;
             border-radius: 6px;
-            font-size: 13px;
+            font-size: 14px;
             margin: 5px;
             transition: all 150ms ease;
         }
@@ -281,8 +283,8 @@ class WaveControlGUI(Gtk.Window):
         /* Indicadores de status aprimorados */
         .status-indicator {
             padding: 6px 12px;
-            border-radius: 16px;
-            font-size: 12px;
+            border-radius: 6px;
+            font-size: 14px;
             font-weight: 600;
             background: @theme_selected_bg_color;
             color: @theme_selected_fg_color;
@@ -302,7 +304,7 @@ class WaveControlGUI(Gtk.Window):
         }
         
         .status-label {
-            font-size: 13px;
+            font-size: 14px;
             color: alpha(@theme_fg_color, 0.8);
         }
         
@@ -334,7 +336,7 @@ class WaveControlGUI(Gtk.Window):
         }
         
         .gesture-compact {
-            font-size: 13px;
+            font-size: 14px;
             padding: 4px 0;
             color: alpha(@theme_fg_color, 0.9);
         }
@@ -393,6 +395,7 @@ class WaveControlGUI(Gtk.Window):
         # Status principal no header (versão compacta)
         self.header_status = Gtk.Label(label="Parado")
         self.header_status.get_style_context().add_class("status-indicator")
+        self.header_status.set_size_request(117, -1)  # Largura mínima para "Ativo"
         
         header_left.pack_start(title_label, False, False, 0)
         header_left.pack_start(self.header_status, False, False, 0)
@@ -814,14 +817,14 @@ class WaveControlGUI(Gtk.Window):
             original_width = pixbuf.get_width()
             original_height = pixbuf.get_height()
             
-            # Calcula nova dimensão responsiva - usa mais espaço disponível
-            max_height = min(800, self.get_allocated_height() - 100)  # Altura dinamica menos header e footer
-            max_width = min(1000, self.get_allocated_width() - 300)    # Largura dinamica menos sidebar
+            # Calcula nova dimensão responsiva - cresce conforme a tela
+            available_height = self.get_allocated_height() - 120  # Altura disponível menos header e footer
+            available_width = self.get_allocated_width() - 320    # Largura disponível menos sidebar
             
-            # Calcula escala baseada nos limites disponiveis
-            scale_height = max_height / original_height if original_height > max_height else 1
-            scale_width = max_width / original_width if original_width > max_width else 1
-            scale_factor = min(scale_height, scale_width, 1)
+            # Calcula escala baseada no espaço disponível
+            scale_height = available_height / original_height
+            scale_width = available_width / original_width
+            scale_factor = min(scale_height, scale_width, 1)  # Limita a 1x para evitar loop
             
             new_width = int(original_width * scale_factor)
             new_height = int(original_height * scale_factor)
