@@ -199,7 +199,7 @@ class WaveControlGUI(Gtk.Window):
         
         /* Sidebar elegante */
         .sidebar {
-            padding: 20px 16px;
+            padding: 0 16px;
             background: alpha(@theme_bg_color, 0.95);
             border-right: 1px solid alpha(@borders, 0.2);
             box-shadow: 1px 0 3px alpha(black, 0.05);
@@ -235,7 +235,7 @@ class WaveControlGUI(Gtk.Window):
             border: 1px solid alpha(@borders, 0.2);
             border-radius: 8px;
             padding: 16px;
-            margin-bottom: 16px;
+            margin-bottom: 0;
             box-shadow: 0 1px 3px alpha(black, 0.05);
             transition: all 200ms ease;
         }
@@ -270,7 +270,7 @@ class WaveControlGUI(Gtk.Window):
             padding: 8px 14px;
             border-radius: 6px;
             font-size: 13px;
-            margin: 3px;
+            margin: 5px;
             transition: all 150ms ease;
         }
         
@@ -298,7 +298,7 @@ class WaveControlGUI(Gtk.Window):
         
         .status-item {
             margin: 4px 0;
-            padding: 4px 0;
+            padding: 10px 0;
         }
         
         .status-label {
@@ -644,7 +644,7 @@ class WaveControlGUI(Gtk.Window):
         footer.set_size_request(-1, 32)
         
         # Informações do rodapé
-        footer_info = Gtk.Label(label="WaveControl - Controle por gestos")
+        footer_info = Gtk.Label(label="WaveControl - Controle por gestos | Criado por Karan Luciano")
         footer_info.set_halign(Gtk.Align.START)
         footer_info.get_style_context().add_class("status-label")
         
