@@ -143,13 +143,6 @@ else
     exit 1
 fi
 
-# Testar NumPy
-if python3 -c "import numpy as np; print('✅ NumPy carregado do AppImage')" 2>/dev/null; then
-    echo "✅ NumPy OK"
-else
-    echo "❌ Erro: NumPy não pôde ser carregado"
-    exit 1
-fi
 
 echo "🚀 Todas as dependências OK! Iniciando WaveControl..."
 echo ""
@@ -175,21 +168,26 @@ EOF
 
 cp WaveControl.AppDir/WaveControl.desktop WaveControl.AppDir/usr/share/applications/
 
-# Criar ícone
-python3 -c "
-import cv2
-import numpy as np
-
-icon = np.zeros((256, 256, 3), dtype=np.uint8)
-icon[:] = (30, 30, 30)
-cv2.circle(icon, (128, 180), 60, (0, 150, 255), -1)
-cv2.rectangle(icon, (98, 80), (118, 140), (0, 150, 255), -1)
-cv2.rectangle(icon, (118, 60), (138, 140), (0, 150, 255), -1)
-cv2.rectangle(icon, (138, 70), (158, 140), (0, 150, 255), -1)
-cv2.rectangle(icon, (158, 80), (178, 140), (0, 150, 255), -1)
-cv2.putText(icon, 'WAVE', (70, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
-cv2.imwrite('WaveControl.AppDir/wavecontrol.png', icon)
+# Criar ícone simples usando convert (ImageMagick) ou fallback
+if command -v convert >/dev/null 2>&1; then
+    # Usar ImageMagick se disponível
+    convert -size 256x256 xc:'#1e1e1e' -fill '#0096ff' -draw 'circle 128,180 80,120' \
+            -fill '#0096ff' -draw 'rectangle 98,80 118,140' \
+            -fill '#0096ff' -draw 'rectangle 118,60 138,140' \
+            -fill '#0096ff' -draw 'rectangle 138,70 158,140' \
+            -fill '#0096ff' -draw 'rectangle 158,80 178,140' \
+            -fill white -pointsize 48 -gravity south -annotate +0+20 'WAVE' \
+            WaveControl.AppDir/wavecontrol.png
+else
+    # Fallback: PNG mínimo válido 1x1 preto
+    python3 -c "
+import struct
+# PNG 1x1 preto mínimo válido
+data = b'\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x01\\x08\\x02\\x00\\x00\\x00\\x90wS\\xde\\x00\\x00\\x00\\x0cIDATx\\x9cc```\\x00\\x00\\x00\\x04\\x00\\x01\\xa9\\xd1\\x99\\xec\\x00\\x00\\x00\\x00IEND\\xaeB\`\\x82'
+with open('WaveControl.AppDir/wavecontrol.png', 'wb') as f:
+    f.write(data)
 "
+fi
 
 cp WaveControl.AppDir/wavecontrol.png WaveControl.AppDir/usr/share/icons/hicolor/256x256/apps/
 
@@ -215,7 +213,6 @@ echo ""
 echo "✅ INCLUÍDO NO APPIMAGE:"
 echo "   • OpenCV ($(pip3 show opencv-python | grep Version | cut -d' ' -f2 2>/dev/null || echo 'latest'))"
 echo "   • MediaPipe ($(pip3 show mediapipe | grep Version | cut -d' ' -f2 2>/dev/null || echo 'latest'))"
-echo "   • NumPy ($(pip3 show numpy | grep Version | cut -d' ' -f2 2>/dev/null || echo 'latest'))"
 echo "   • python-uinput"
 echo "   • Todas as dependências Python necessárias"
 echo ""
