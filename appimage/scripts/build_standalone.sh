@@ -6,9 +6,20 @@ set -e
 echo "=== Construindo WaveControl AppImage Standalone ==="
 echo "    Incluindo Python 3.11 completo + todas as dependências"
 
-# Limpar estrutura anterior
+# Limpar estrutura anterior COMPLETAMENTE para garantir novo build
+echo "🧹 Limpando builds anteriores..."
 rm -rf WaveControl.AppDir
 rm -f WaveControl-x86_64.AppImage
+rm -f ../WaveControl-x86_64.AppImage
+
+# Verificar se main.py existe
+if [ ! -f "../../main.py" ]; then
+    echo "❌ Erro: main.py não encontrado em ../../main.py"
+    echo "Certifique-se de que está executando o script do diretório correto"
+    exit 1
+fi
+
+echo "✅ main.py encontrado - Build será baseado na versão atual"
 
 echo "📥 Baixando Python 3.11 portable..."
 
@@ -60,17 +71,87 @@ chmod +x WaveControl.AppDir/usr/bin/pip3
 
 echo "📚 Instalando dependências Python no Python embutido..."
 
+# Verificar se dependências do sistema estão disponíveis
+echo "🔍 Verificando dependências do sistema para PyGObject..."
+
+# Verificar girepository-2.0 primeiro (necessário para PyGObject 3.42+)
+if pkg-config --exists girepository-2.0; then
+    echo "✅ girepository-2.0 encontrado - usando PyGObject moderno"
+    PYGOBJECT_VERSION=">=3.42.0"
+elif pkg-config --exists gobject-introspection-1.0; then
+    echo "⚠️  Usando girepository-1.0 - instalando PyGObject compatível"
+    PYGOBJECT_VERSION="<3.42.0"
+else
+    echo "❌ ERRO: GObject Introspection não encontrado."
+    echo ""
+    echo "Para corrigir, instale as dependências do sistema:"
+    echo ""
+    if command -v apt >/dev/null 2>&1; then
+        echo "Ubuntu/Debian:"
+        echo "  sudo apt update"  
+        echo "  sudo apt install libgirepository1.0-dev gcc python3-dev"
+    elif command -v dnf >/dev/null 2>&1; then
+        echo "Fedora:"
+        echo "  sudo dnf install gobject-introspection-devel gcc python3-devel"
+    elif command -v pacman >/dev/null 2>&1; then
+        echo "Arch Linux:"
+        echo "  sudo pacman -S gobject-introspection gcc python"
+    else
+        echo "Instale as dependências de desenvolvimento do GObject Introspection para seu sistema"
+    fi
+    echo ""
+    echo "Depois execute o build novamente."
+    exit 1
+fi
+
 # Instalar dependências usando o pip embutido
-WaveControl.AppDir/usr/bin/pip3 install \
-    opencv-python>=4.8.0 \
-    mediapipe==0.10.14 \
-    python-uinput>=0.11.2 \
-    PyGObject>=3.42.0
+echo "📦 Instalando dependências Python..."
 
-echo "Dependências instaladas com sucesso!"
+# Instalar uma por vez para melhor debug
+echo "Instalando opencv-python..."
+WaveControl.AppDir/usr/bin/pip3 install opencv-python>=4.8.0 || {
+    echo "❌ Erro ao instalar opencv-python"
+    exit 1
+}
 
-# Copiar arquivo principal
+echo "Instalando mediapipe..."
+WaveControl.AppDir/usr/bin/pip3 install mediapipe==0.10.14 || {
+    echo "❌ Erro ao instalar mediapipe"
+    exit 1
+}
+
+echo "Instalando python-uinput..."
+# Forçar uso do GCC para evitar problema com clang
+export CC=gcc
+WaveControl.AppDir/usr/bin/pip3 install python-uinput>=0.11.2 || {
+    echo "❌ Erro ao instalar python-uinput"
+    echo "Verifique se as dependências do sistema estão instaladas:"
+    echo "  sudo apt install build-essential linux-headers-$(uname -r)"
+    exit 1
+}
+
+echo "Instalando PyGObject${PYGOBJECT_VERSION}..."
+WaveControl.AppDir/usr/bin/pip3 install "PyGObject${PYGOBJECT_VERSION}" || {
+    echo "❌ Erro ao instalar PyGObject"
+    echo "Verifique se as dependências do sistema estão instaladas:"
+    echo "  Ubuntu/Debian: sudo apt install libgirepository1.0-dev gcc python3-dev"
+    echo "  Fedora: sudo dnf install gobject-introspection-devel gcc python3-devel"
+    echo "  Arch: sudo pacman -S gobject-introspection gcc python"
+    exit 1
+}
+
+echo "✅ Dependências instaladas com sucesso!"
+
+# Copiar arquivo principal (SEMPRE a versão mais atual)
+echo "📋 Copiando main.py atual para o AppImage..."
 cp ../../main.py WaveControl.AppDir/usr/bin/
+echo "✅ main.py copiado - versão: $(date '+%Y-%m-%d %H:%M:%S')"
+
+# Verificar se copiou corretamente
+if [ ! -f "WaveControl.AppDir/usr/bin/main.py" ]; then
+    echo "❌ Erro: Falha ao copiar main.py"
+    exit 1
+fi
 
 # Criar AppRun totalmente autônomo
 cat > WaveControl.AppDir/AppRun << 'EOF'
@@ -216,8 +297,22 @@ if [ ! -f "../tools/appimagetool-x86_64.AppImage" ]; then
 fi
 
 echo ""
-echo "Gerando AppImage Standalone..."
+echo "🔨 Gerando AppImage Standalone..."
 ARCH=x86_64 ../tools/appimagetool-x86_64.AppImage WaveControl.AppDir ../WaveControl-x86_64.AppImage
+
+# Verificar se o AppImage foi criado corretamente
+if [ ! -f "../WaveControl-x86_64.AppImage" ]; then
+    echo "❌ Erro: AppImage não foi criado!"
+    exit 1
+fi
+
+# Verificar se o AppImage é executável
+if [ ! -x "../WaveControl-x86_64.AppImage" ]; then
+    echo "⚠️  Corrigindo permissões do AppImage..."
+    chmod +x ../WaveControl-x86_64.AppImage
+fi
+
+echo "✅ AppImage criado e verificado com sucesso!"
 
 # Mostrar informações
 echo ""
