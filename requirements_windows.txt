@@ -2,18 +2,23 @@
 # Instalar com: pip install -r requirements_windows.txt
 
 # ===== DEPENDÊNCIAS BÁSICAS =====
-# Computer Vision e MediaPipe
+# Computer Vision (sem MediaPipe para evitar problemas de DLL)
 opencv-python>=4.8.0
-mediapipe>=0.10.0
 
 # Simulação de teclas para Windows
 pynput>=1.7.6
 
-# ===== VERSÃO TKINTER (RECOMENDADA) =====
-# Tkinter já vem com Python - zero configuração!
-# Execute: python main_windows_tkinter.py
+# ===== VERSÃO SIMPLES (RECOMENDADA) =====
+# Usa apenas OpenCV para detecção de movimento
+# Execute: python main_windows_simple.py
 # Dependência extra apenas para redimensionar imagens:
 Pillow>=9.0.0
+
+# ===== VERSÃO TKINTER COM MEDIAPIPE (OPCIONAL) =====
+# Se MediaPipe funcionar no seu sistema:
+# Execute: python main_windows_tkinter.py
+# Descomente a linha abaixo:
+# mediapipe>=0.10.0
 
 # ===== VERSÃO MODERNA (OPCIONAL) =====
 # Para interface mais bonita, instale PySide6:

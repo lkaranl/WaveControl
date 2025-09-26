@@ -1,165 +1,92 @@
 # WaveControl - Windows (Versão Simples)
 
-🎯 **Solução definitiva para Windows - SEM complicações com GTK!**
+Controle de apresentações por gestos usando apenas OpenCV (sem MediaPipe).
 
-## 🚀 Instalação Super Simples
+## 🚀 Instalação Rápida
 
 ### 1. Instalar Python
-- Baixe de: https://python.org
-- **IMPORTANTE**: Marque "Add Python to PATH"
+- Baixe Python 3.8+ do site oficial
+- ✅ Marque "Add Python to PATH" durante a instalação
 
-### 2. Instalar automaticamente
-```batch
-# Execute o instalador simples
-install_windows_simple.bat
+### 2. Instalar Dependências
+```bash
+pip install opencv-python pynput Pillow
 ```
 
 ### 3. Executar
 ```bash
-# Versão recomendada (Tkinter - nativo do Python)
-python main_windows_tkinter.py
-
-# Versão moderna (PySide6 - mais bonita)
-pip install PySide6
-python main_windows_modern.py
+python main_windows_simple.py
 ```
 
-## ✨ Duas Versões Disponíveis
+## 🎮 Como Usar
 
-### 🥇 **Tkinter** (Recomendada)
-- ✅ **Zero configuração** - Vem com Python
-- ✅ **Aparência nativa** do Windows
-- ✅ **Estável e confiável**
-- ✅ **Instalação em 30 segundos**
-- 📁 Arquivo: `main_windows_tkinter.py`
+### Gestos (baseados em movimento)
+- **Pouco movimento** → Próximo slide (→)
+- **Movimento médio** → Slide anterior (←)
+- **Movimento grande** → Primeiro slide (Home)
+- **Movimento máximo** → Último slide (End)
+- **Sem movimento** → Neutro
 
-### 🎨 **PySide6** (Moderna)
-- ✅ **Interface mais bonita**
-- ✅ **Componentes modernos**
-- ✅ **Animações suaves**
-- ⚠️ **Dependência extra** (PySide6)
-- 📁 Arquivo: `main_windows_modern.py`
+### Controles da Interface
+- **▶ Iniciar/⏹ Parar**: Liga/desliga a detecção
+- **Zoom Digital**: 1x a 4x para melhorar precisão
+- **Mostrar detecção**: Visualiza o que a câmera está detectando
 
-## 🎮 Funcionalidades
+## 🔧 Configuração
 
-### Gestos Suportados
-- 👆 **1 dedo** → Próximo slide (Seta →)
-- ✌️ **2 dedos** → Slide anterior (Seta ←)
-- 🤟 **3 dedos** → Primeiro slide (Home)
-- 🖖 **4 dedos** → Último slide (End)
-- ✊ **0 dedos** → Neutro (sem ação)
+### Posicionamento da Câmera
+- Posicione-se de frente para a câmera
+- Mantenha a mão no centro do frame
+- Use zoom digital para ajustar a área de detecção
 
-### Interface
-- **Zoom digital**: 1x a 4x
-- **Filtro temporal**: Evita ações acidentais
-- **Status em tempo real**: Acompanhe gestos detectados
-- **Configurações**: Mostrar/ocultar landmarks
-- **Aparência nativa**: Integra perfeitamente com Windows
+### Calibração
+- O sistema calibra automaticamente por 2 segundos
+- Mantenha-se parado durante a calibração
+- Após a calibração, faça movimentos para testar
 
-## 📊 Comparação das Versões
+## 🛠️ Solução de Problemas
 
-| Recurso | Tkinter | PySide6 | GTK (❌) |
-|---------|---------|---------|----------|
-| **Instalação** | ✅ Nativa | ⚠️ Extra | ❌ Complexa |
-| **Aparência** | ✅ Nativa | ✅ Moderna | ⚠️ Linux-like |
-| **Performance** | ✅ Rápida | ✅ Rápida | ⚠️ Média |
-| **Estabilidade** | ✅ Alta | ✅ Alta | ❌ Problemas |
-| **Manutenção** | ✅ Simples | ✅ Simples | ❌ Complexa |
+### Câmera não funciona
+- Verifique se a câmera está conectada
+- Feche outros programas que usam a câmera
+- Tente reiniciar o programa
 
-## 🔧 Solução de Problemas
+### Detecção não funciona bem
+- Ajuste o zoom digital (2x ou 3x)
+- Melhore a iluminação
+- Mantenha fundo simples (sem muito movimento)
+- Use a opção "Mostrar detecção" para ver o que está sendo detectado
 
-### Erro de Câmera
-```
-Erro: Não foi possível acessar a câmera
-```
-**Solução:**
-- Feche outros apps que usam câmera (Skype, Teams, etc.)
-- Tente mudar `CAM_INDEX` de 0 para 1 no código
+### Teclas não funcionam
+- Certifique-se de que o foco está na apresentação
+- Teste manualmente as teclas ← → Home End
+- Verifique se não há outro programa interceptando as teclas
 
-### Gestos não funcionam
-**Solução:**
-- Aguarde calibração (2 segundos)
-- Melhore iluminação
-- Mantenha mão a 30-60cm da câmera
+## 📋 Requisitos Mínimos
 
-### Python não encontrado
-```
-'python' is not recognized...
-```
-**Solução:**
-- Reinstale Python marcando "Add to PATH"
-- Ou use `py` em vez de `python`
+- **Sistema**: Windows 7/8/10/11
+- **Python**: 3.8 ou superior
+- **Câmera**: Webcam ou câmera USB
+- **RAM**: 4GB (recomendado)
+- **CPU**: Dual-core 2GHz+
 
-## 🎯 Uso em Apresentações
+## 🆚 Diferenças da Versão Completa
 
-### PowerPoint
-1. Abra apresentação
-2. Pressione F5 (modo apresentação)
-3. Execute WaveControl
-4. Use gestos para navegar
+Esta versão simples:
+- ✅ **Mais estável** - sem problemas de DLL
+- ✅ **Instalação fácil** - menos dependências
+- ✅ **Funciona em qualquer PC** - sem requisitos especiais
+- ❌ **Menos preciso** - baseado em movimento, não gestos específicos
+- ❌ **Menos gestos** - apenas 4 ações principais
 
-### Google Slides
-1. Abra apresentação no navegador
-2. Clique em "Apresentar"
-3. Execute WaveControl
-4. Navegue com gestos
+## 📞 Suporte
 
-### LibreOffice Impress
-1. Abra apresentação
-2. Pressione F5
-3. Execute WaveControl
-4. Controle com gestos
-
-## ⚡ Performance
-
-- **Latência**: <100ms
-- **FPS**: ~30 frames/segundo
-- **CPU**: Uso moderado
-- **RAM**: ~200MB
-- **Compatibilidade**: Windows 10/11
-
-## 🔒 Privacidade
-
-- ✅ **100% local** - sem internet
-- ✅ **Sem armazenamento** de imagens
-- ✅ **Sem transmissão** de dados
-- ✅ **Código aberto** - você vê tudo
-
-## 📈 Por que essa solução é melhor?
-
-### ❌ Problemas da versão GTK:
-- Requer MSYS2 (500MB+ de download)
-- Configuração manual complexa
-- Aparência inconsistente no Windows
-- Possíveis conflitos de dependências
-
-### ✅ Vantagens Tkinter/PySide6:
-- **Instalação em segundos**
-- **Aparência nativa do Windows**
-- **Zero conflitos**
-- **Suporte oficial Microsoft**
-- **Manutenção simples**
-
-## 🏆 Resultado Final
-
-**Antes (GTK):**
-```bash
-# 20+ passos de configuração
-# Downloads gigantes (MSYS2)
-# Configuração manual PATH
-# Possíveis erros
-# Aparência estranha
-```
-
-**Agora (Tkinter):**
-```bash
-# 3 passos simples
-install_windows_simple.bat
-python main_windows_tkinter.py
-# FUNCIONANDO! 🎉
-```
+Se tiver problemas:
+1. Verifique se todas as dependências estão instaladas
+2. Teste com zoom digital 2x-3x
+3. Melhore a iluminação do ambiente
+4. Use fundo simples sem movimento
 
 ---
 
-**WaveControl Windows** - A solução definitiva para controle por gestos no Windows!  
-Criado por Karan Luciano
+**Criado por Karan Luciano** | Versão Simples - Sem MediaPipe
