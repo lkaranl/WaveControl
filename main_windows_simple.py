@@ -28,20 +28,21 @@ CONSISTENCY_THRESHOLD = 0.75  # 75% das amostras devem ser iguais
 # ===== Dispositivo virtual (pynput para Windows) =====
 kb_controller = keyboard.Controller()
 
-# ===== Detecção de Movimento Simples =====
-class SimpleGestureDetector:
+# ===== Detecção de Dedos Refinada =====
+class FingerGestureDetector:
     def __init__(self):
         self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(detectShadows=True)
         self.kernel = np.ones((5,5), np.uint8)
+        self.kernel_small = np.ones((3,3), np.uint8)
         self.last_gesture = "neutral"
         
     def detect_gesture(self, frame):
-        """Detecção simples baseada em movimento e contornos"""
+        """Detecção refinada baseada em contornos e convex hull"""
         # Aplica subtração de fundo
         fg_mask = self.bg_subtractor.apply(frame)
         
         # Operações morfológicas para limpar a máscara
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, self.kernel)
+        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, self.kernel_small)
         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, self.kernel)
         
         # Encontra contornos
@@ -50,27 +51,52 @@ class SimpleGestureDetector:
         if not contours:
             return "neutral", fg_mask
         
-        # Pega o maior contorno (assumindo que é a mão)
+        # Pega o maior contorno (mão)
         largest_contour = max(contours, key=cv2.contourArea)
         area = cv2.contourArea(largest_contour)
         
-        # Classifica baseado na área do contorno
-        if area < 5000:
+        if area < 3000:
             return "neutral", fg_mask
-        elif area < 15000:
-            return "next", fg_mask  # 1 dedo (área pequena)
-        elif area < 25000:
-            return "prev", fg_mask  # 2 dedos
-        elif area < 35000:
-            return "home", fg_mask  # 3 dedos
+        
+        # Calcula convex hull e defeitos
+        hull = cv2.convexHull(largest_contour, returnPoints=False)
+        defects = cv2.convexityDefects(largest_contour, hull)
+        
+        finger_count = 0
+        if defects is not None:
+            for i in range(defects.shape[0]):
+                s, e, f, d = defects[i, 0]
+                start = tuple(largest_contour[s][0])
+                end = tuple(largest_contour[e][0])
+                far = tuple(largest_contour[f][0])
+                
+                # Calcula ângulo
+                a = np.sqrt((end[0] - start[0])**2 + (end[1] - start[1])**2)
+                b = np.sqrt((far[0] - start[0])**2 + (far[1] - start[1])**2)
+                c = np.sqrt((end[0] - far[0])**2 + (end[1] - far[1])**2)
+                
+                if a > 0 and b > 0 and c > 0:
+                    angle = np.arccos((b**2 + c**2 - a**2) / (2*b*c))
+                    if angle <= np.pi/2 and d > 20000:  # Ajuste fino para dedos
+                        finger_count += 1
+        
+        # Classifica baseado no número de dedos detectados
+        if finger_count == 0:
+            return "neutral", fg_mask
+        elif finger_count == 1:
+            return "next", fg_mask
+        elif finger_count == 2:
+            return "prev", fg_mask
+        elif finger_count >= 3:
+            return "home", fg_mask
         else:
-            return "end", fg_mask   # 4 dedos (área grande)
+            return "neutral", fg_mask
     
     def close(self):
         pass
 
 # Instância do detector
-detector = SimpleGestureDetector()
+detector = FingerGestureDetector()
 
 # ===== Histórico de Gestos =====
 gesture_history = []
@@ -269,15 +295,14 @@ class WaveControlApp:
         footer_label.pack(anchor='center')
     
     def create_gestures_card(self, parent):
-        card = ttk.LabelFrame(parent, text="Gestos (Movimento)", padding=15)
+        card = ttk.LabelFrame(parent, text="Gestos (Dedos)", padding=15)
         card.pack(fill='x', pady=(0, 10))
         
         gestures = [
-            "🟢 Pouco movimento → Próximo (→)",
-            "🟡 Movimento médio → Anterior (←)", 
-            "🟠 Movimento grande → Início (Home)",
-            "🔴 Movimento máximo → Fim (End)",
-            "⚫ Sem movimento → Neutro"
+            "👆 1 dedo → Próximo (→)",
+            "✌️ 2 dedos → Anterior (←)", 
+            "🤟 3+ dedos → Início (Home)",
+            "✊ Fechado → Neutro"
         ]
         
         for gesture in gestures:
@@ -335,7 +360,7 @@ class WaveControlApp:
         card = ttk.LabelFrame(parent, text="Configurações", padding=15)
         card.pack(fill='x', pady=(0, 10))
         
-        movement_check = ttk.Checkbutton(card, text="Mostrar detecção",
+        movement_check = ttk.Checkbutton(card, text="Mostrar contornos",
                                        variable=self.show_movement)
         movement_check.pack(anchor='w')
     
@@ -422,12 +447,17 @@ class WaveControlApp:
             add_gesture_to_history(action)
             stable_action = get_stable_gesture()
             
-            # Desenha detecção se habilitado
+            # Desenha contornos se habilitado
             if self.show_movement.get():
-                # Converte máscara para 3 canais para exibir
-                movement_colored = cv2.applyColorMap(movement_mask, cv2.COLORMAP_JET)
-                # Sobrepor na imagem original
-                frame = cv2.addWeighted(frame, 0.7, movement_colored, 0.3, 0)
+                # Desenha contornos na imagem
+                contours, _ = cv2.findContours(movement_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                if contours:
+                    largest_contour = max(contours, key=cv2.contourArea)
+                    cv2.drawContours(frame, [largest_contour], -1, (0, 255, 0), 2)
+                    
+                    # Desenha convex hull
+                    hull = cv2.convexHull(largest_contour)
+                    cv2.drawContours(frame, [hull], -1, (255, 0, 0), 2)
             
             now = time.time()
             
