@@ -11,6 +11,7 @@ from functools import lru_cache
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import queue
+from analytics import get_analytics
 
 # ===== Configurações =====
 MIN_DET = 0.6
@@ -188,6 +189,9 @@ class WaveControlGUI(Gtk.Window):
         self._frame_queue = queue.Queue(maxsize=2)
         self._result_queue = queue.Queue(maxsize=2)
         self._processing_active = False
+        
+        # Analytics
+        self.analytics = get_analytics()
         
         # Setup da interface
         self.setup_ui()
@@ -596,9 +600,23 @@ class WaveControlGUI(Gtk.Window):
         filter_item.pack_start(filter_label, False, False, 0)
         filter_item.pack_end(self.filter_label, False, False, 0)
         
+        # FPS
+        fps_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        fps_item.get_style_context().add_class("status-item")
+        
+        fps_label = Gtk.Label(label="FPS:")
+        fps_label.get_style_context().add_class("status-label")
+        
+        self.fps_label = Gtk.Label(label="0.0")
+        self.fps_label.get_style_context().add_class("status-indicator")
+        
+        fps_item.pack_start(fps_label, False, False, 0)
+        fps_item.pack_end(self.fps_label, False, False, 0)
+        
         status_grid.pack_start(self.status_label, False, False, 0)
         status_grid.pack_start(action_item, False, False, 0)
         status_grid.pack_start(filter_item, False, False, 0)
+        status_grid.pack_start(fps_item, False, False, 0)
         
         status_card.pack_start(status_title, False, False, 0)
         status_card.pack_start(status_grid, False, False, 0)
@@ -619,6 +637,51 @@ class WaveControlGUI(Gtk.Window):
         config_card.pack_start(config_title, False, False, 0)
         config_card.pack_start(self.show_landmarks_check, False, False, 0)
         sidebar.pack_start(config_card, False, False, 0)
+        
+        # Card de Métricas (Analytics)
+        metrics_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        metrics_card.get_style_context().add_class("compact-card")
+        
+        metrics_title = Gtk.Label(label="Métricas")
+        metrics_title.get_style_context().add_class("card-title")
+        metrics_title.set_halign(Gtk.Align.START)
+        
+        # Grid de métricas
+        metrics_grid = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        metrics_grid.get_style_context().add_class("status-grid")
+        
+        # Total de gestos
+        gestures_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        gestures_item.get_style_context().add_class("status-item")
+        
+        gestures_label = Gtk.Label(label="Gestos:")
+        gestures_label.get_style_context().add_class("status-label")
+        
+        self.total_gestures_label = Gtk.Label(label="0")
+        self.total_gestures_label.get_style_context().add_class("status-indicator")
+        
+        gestures_item.pack_start(gestures_label, False, False, 0)
+        gestures_item.pack_end(self.total_gestures_label, False, False, 0)
+        
+        # Frames processados
+        frames_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        frames_item.get_style_context().add_class("status-item")
+        
+        frames_label = Gtk.Label(label="Frames:")
+        frames_label.get_style_context().add_class("status-label")
+        
+        self.total_frames_label = Gtk.Label(label="0")
+        self.total_frames_label.get_style_context().add_class("status-indicator")
+        
+        frames_item.pack_start(frames_label, False, False, 0)
+        frames_item.pack_end(self.total_frames_label, False, False, 0)
+        
+        metrics_grid.pack_start(gestures_item, False, False, 0)
+        metrics_grid.pack_start(frames_item, False, False, 0)
+        
+        metrics_card.pack_start(metrics_title, False, False, 0)
+        metrics_card.pack_start(metrics_grid, False, False, 0)
+        sidebar.pack_start(metrics_card, False, False, 0)
         
         # === ÁREA PRINCIPAL MAXIMIZADA ===
         main_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -720,6 +783,11 @@ class WaveControlGUI(Gtk.Window):
             
         self.is_running = True
         self.start_ts = time.time()
+        
+        # Inicia sessão de analytics
+        self.analytics.start_session()
+        self.analytics.set_calibration_time(CALIBRATION_S)
+        
         self.header_start_button.set_label("⏹ Parar")
         self.header_status.set_text("Calibrando...")
         self.status_label.set_text("Sistema calibrando...")
@@ -735,11 +803,20 @@ class WaveControlGUI(Gtk.Window):
         
     def stop_detection(self):
         self.is_running = False
+        
+        # Finaliza sessão de analytics
+        self.analytics.end_session()
+        
         if self.cap:
             self.cap.release()
         self.header_start_button.set_label("▶ Iniciar")
         self.header_status.set_text("Parado")
         self.status_label.set_text("Sistema parado")
+        
+        # Mostra estatísticas no terminal
+        print("\n" + "="*50)
+        self.analytics.print_stats()
+        print("="*50 + "\n")
         
         # Mostra placeholder e esconde vídeo
         self.video_image.clear()
@@ -749,9 +826,17 @@ class WaveControlGUI(Gtk.Window):
         # Reset dos indicadores
         self.action_indicator.set_text("neutral")
         self.filter_label.set_text("0/8")
+        self.fps_label.set_text("0.0")
+        
+        # Reset métricas
+        stats = self.analytics.get_stats_summary()
+        self.total_gestures_label.set_text(str(stats['usage']['total_gestures']))
+        self.total_frames_label.set_text(str(stats['performance']['total_frames']))
         
     def _process_frame_async(self, frame_data):
         """Processa frame em thread separada"""
+        start_time = time.perf_counter()
+        
         frame, zoom_level, show_landmarks = frame_data
         
         # Frame pooling: reutiliza buffers pré-alocados
@@ -769,6 +854,10 @@ class WaveControlGUI(Gtk.Window):
             rgb = self._rgb_buffer
         
         res = hands.process(rgb)
+        
+        # Métrica de tempo de processamento
+        processing_time = (time.perf_counter() - start_time) * 1000
+        self.analytics.record_frame(processing_time)
         
         raw_action = "neutral"
         handed = "Right"
@@ -827,7 +916,11 @@ class WaveControlGUI(Gtk.Window):
                     frame_data = (frame.copy(), self.zoom_level, self.show_landmarks_check.get_active())
                     self._frame_queue.put(frame_data, block=False)
                 except queue.Full:
+                    self.analytics.record_dropped_frame()
                     pass
+                
+                # Atualiza tamanho da fila
+                self.analytics.set_queue_size(self._frame_queue.qsize())
                 
                 # Tenta pegar resultado processado
                 raw_action = "neutral"
@@ -870,18 +963,22 @@ class WaveControlGUI(Gtk.Window):
                     elif action != "neutral" and not self.action_executed:
                         if action == "next":
                             press_next()
+                            self.analytics.record_gesture("next")
                             GLib.idle_add(self.header_status.set_text, "Próximo →")
                             GLib.idle_add(self.status_label.set_text, "Próximo slide executado")
                         elif action == "prev":
                             press_prev()
+                            self.analytics.record_gesture("prev")
                             GLib.idle_add(self.header_status.set_text, "← Anterior")
                             GLib.idle_add(self.status_label.set_text, "Slide anterior executado")
                         elif action == "home":
                             press_home()
+                            self.analytics.record_gesture("home")
                             GLib.idle_add(self.header_status.set_text, "⏮ Início")
                             GLib.idle_add(self.status_label.set_text, "Indo para o início")
                         elif action == "end":
                             press_end()
+                            self.analytics.record_gesture("end")
                             GLib.idle_add(self.header_status.set_text, "⏭ Fim")
                             GLib.idle_add(self.status_label.set_text, "Indo para o fim")
                         self.action_executed = True
@@ -893,6 +990,16 @@ class WaveControlGUI(Gtk.Window):
                 # Atualiza indicadores de status
                 GLib.idle_add(self.action_indicator.set_text, action)
                 GLib.idle_add(self.filter_label.set_text, f"{len(gesture_history)}/{GESTURE_WINDOW_SIZE}")
+                
+                # Atualiza FPS e métricas
+                stats = self.analytics.get_stats_summary()
+                fps_value = stats['performance']['fps']
+                total_gestures = stats['usage']['total_gestures']
+                total_frames = stats['performance']['total_frames']
+                
+                GLib.idle_add(self.fps_label.set_text, f"{fps_value:.1f}")
+                GLib.idle_add(self.total_gestures_label.set_text, str(total_gestures))
+                GLib.idle_add(self.total_frames_label.set_text, str(total_frames))
                 
                 # Converte frame para exibição na GUI
                 height, width, channels = frame.shape
