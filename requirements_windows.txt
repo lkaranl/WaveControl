@@ -1,0 +1,31 @@
+# Dependências para WaveControl - Windows
+# Instalar com: pip install -r requirements_windows.txt
+
+# ===== DEPENDÊNCIAS BÁSICAS =====
+# Computer Vision (sem MediaPipe para evitar problemas de DLL)
+opencv-python>=4.8.0
+
+# Simulação de teclas para Windows
+pynput>=1.7.6
+
+# ===== VERSÃO SIMPLES (RECOMENDADA) =====
+# Usa apenas OpenCV para detecção de movimento
+# Execute: python main_windows_simple.py
+# Dependência extra apenas para redimensionar imagens:
+Pillow>=9.0.0
+
+# ===== VERSÃO TKINTER COM MEDIAPIPE (OPCIONAL) =====
+# Se MediaPipe funcionar no seu sistema:
+# Execute: python main_windows_tkinter.py
+# Descomente a linha abaixo:
+# mediapipe>=0.10.0
+
+# ===== VERSÃO MODERNA (OPCIONAL) =====
+# Para interface mais bonita, instale PySide6:
+# PySide6>=6.5.0
+# Execute: python main_windows_modern.py
+
+# ===== VERSÃO GTK (NÃO RECOMENDADA PARA WINDOWS) =====
+# Muito complexa de configurar no Windows
+# PyGObject>=3.42.0
+# Requer MSYS2 e configuração manual
