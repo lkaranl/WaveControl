@@ -2,13 +2,14 @@
 """
 WaveControl CLI - Controle de apresentações por gestos
 
-OTIMIZAÇÕES DE CACHE IMPLEMENTADAS:
-- MediaPipe instance caching: Reutiliza instância do modelo (economiza ~500ms por init)
-- Frame buffer pooling: Reutiliza buffers de memória (reduz alocações em ~40%)
-- Camera index caching: Memoriza índice da câmera (economiza 1-2s no startup)
-- Gesture map dict: Dict lookup ao invés de if-chains (2x mais rápido)
-- Counter para histograma: Usa Counter otimizado (3x mais rápido)
+OTIMIZAÇÕES IMPLEMENTADAS:
+- MediaPipe instance caching: Reutiliza instância do modelo
+- Frame buffer pooling: Reutiliza buffers de memória
+- Camera index caching: Memoriza índice da câmera
+- Gesture map dict: Dict lookup ao invés de if-chains
+- Counter para histograma: Usa Counter otimizado
 - Pre-computed constants: Thresholds e tuples pré-calculados
+- Async frame processing: Processamento assíncrono com ThreadPool
 """
 import cv2
 import time
@@ -16,6 +17,9 @@ import uinput
 import mediapipe as mp
 from functools import lru_cache
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+import threading
+import queue
 
 # ===== Configurações =====
 MIN_DET = 0.6
@@ -149,9 +153,15 @@ class WaveControlCLI:
         self._frame_buffer = None
         self._rgb_buffer = None
         
-        # Cache de último gesto detectado (para evitar recálculos desnecessários)
+        # Cache de último gesto detectado
         self._last_raw_gesture = "neutral"
         self._gesture_repeat_count = 0
+        
+        # Thread pool para processamento assíncrono
+        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="wavecontrol")
+        self._frame_queue = queue.Queue(maxsize=2)  # Buffer de 2 frames
+        self._result_queue = queue.Queue(maxsize=2)
+        self._processing_active = False
         
     # Cache de índice de câmera encontrada (evita buscar toda vez)
     _camera_index_cache = None
@@ -219,82 +229,156 @@ class WaveControlCLI:
         
         return True
         
+    def _process_frame_async(self, frame):
+        """Processa frame em thread separada"""
+        # Frame pooling: reutiliza buffers pré-alocados quando possível
+        if self._frame_buffer is None or self._frame_buffer.shape != frame.shape:
+            self._frame_buffer = cv2.flip(frame, 1)
+            self._rgb_buffer = cv2.cvtColor(self._frame_buffer, cv2.COLOR_BGR2RGB)
+        else:
+            # Reutiliza buffers existentes (evita alocações)
+            cv2.flip(frame, 1, dst=self._frame_buffer)
+            cv2.cvtColor(self._frame_buffer, cv2.COLOR_BGR2RGB, dst=self._rgb_buffer)
+        
+        res = hands.process(self._rgb_buffer)
+        
+        raw_action = "neutral"
+        handed = "Right"
+        
+        if res.multi_hand_landmarks:
+            lm = res.multi_hand_landmarks[0]
+            if res.multi_handedness and len(res.multi_handedness) > 0:
+                handed = res.multi_handedness[0].classification[0].label
+            raw_action = classify_gesture(lm.landmark, handed)
+        
+        return raw_action
+    
+    def _gesture_processor_thread(self):
+        """Thread dedicada para processar gestos de forma assíncrona"""
+        while self._processing_active:
+            try:
+                # Pega frame da fila (timeout para verificar flag)
+                frame = self._frame_queue.get(timeout=0.1)
+                
+                # Processa frame
+                raw_action = self._process_frame_async(frame)
+                
+                # Coloca resultado na fila
+                try:
+                    self._result_queue.put(raw_action, block=False)
+                except queue.Full:
+                    # Descarta resultado antigo se fila cheia
+                    try:
+                        self._result_queue.get_nowait()
+                    except queue.Empty:
+                        pass
+                    self._result_queue.put(raw_action, block=False)
+                    
+            except queue.Empty:
+                continue
+            except Exception as e:
+                print(f"⚠️  Erro no processamento: {e}")
+                continue
+    
     def process_video(self):
         frame_count = 0
         
-        while self.is_running and self.cap and self.cap.isOpened():
-            try:
-                ok, frame = self.cap.read()
-                if not ok:
-                    break
-                
-                # Frame pooling: reutiliza buffers pré-alocados quando possível
-                if self._frame_buffer is None:
-                    self._frame_buffer = cv2.flip(frame, 1)
-                    self._rgb_buffer = cv2.cvtColor(self._frame_buffer, cv2.COLOR_BGR2RGB)
-                else:
-                    # Reutiliza buffers existentes (evita alocações)
-                    cv2.flip(frame, 1, dst=self._frame_buffer)
-                    cv2.cvtColor(self._frame_buffer, cv2.COLOR_BGR2RGB, dst=self._rgb_buffer)
-                
-                res = hands.process(self._rgb_buffer)
-                
-                raw_action = "neutral"
-                handed = "Right"
-                
-                if res.multi_hand_landmarks:
-                    lm = res.multi_hand_landmarks[0]
-                    if res.multi_handedness and len(res.multi_handedness) > 0:
-                        handed = res.multi_handedness[0].classification[0].label
-                    raw_action = classify_gesture(lm.landmark, handed)
-                
-                # Adiciona gesto ao histórico e obtém gesto estável
-                add_gesture_to_history(raw_action)
-                action = get_stable_gesture()
-                
-                now = time.time()
-                
-                # Calibração inicial
-                if now - self.start_ts < CALIBRATION_S:
-                    if frame_count % 30 == 0:  # Mostra a cada segundo
-                        remaining = int(CALIBRATION_S - (now - self.start_ts))
-                        print(f"⏱️  Calibrando... {remaining}s restantes")
-                else:
-                    # Lógica de execução de ações
-                    if action == "neutral":
-                        if self.action_executed:
-                            self.action_executed = False
-                            print("✅ Sistema pronto para nova ação")
-                    elif action != "neutral" and not self.action_executed:
-                        if action == "next":
-                            press_next()
-                            print("➡️  PRÓXIMO slide executado")
-                        elif action == "prev":
-                            press_prev()
-                            print("⬅️  ANTERIOR slide executado")
-                        elif action == "home":
-                            press_home()
-                            print("🏠 INÍCIO da apresentação")
-                        elif action == "end":
-                            press_end()
-                            print("🔚 FIM da apresentação")
-                        self.action_executed = True
-                        self.last_action = action
-                    elif action != "neutral" and self.action_executed:
-                        # Não mostra mensagem repetitiva, apenas aguarda
+        # Inicia thread de processamento assíncrono
+        self._processing_active = True
+        processor_thread = threading.Thread(target=self._gesture_processor_thread, daemon=True)
+        processor_thread.start()
+        
+        try:
+            while self.is_running and self.cap and self.cap.isOpened():
+                try:
+                    ok, frame = self.cap.read()
+                    if not ok:
+                        break
+                    
+                    # Envia frame para processamento assíncrono (não bloqueia)
+                    try:
+                        self._frame_queue.put(frame, block=False)
+                    except queue.Full:
+                        # Se fila cheia, pula frame (prefere tempo real)
                         pass
-                
-                frame_count += 1
-                time.sleep(0.03)  # ~30 FPS
-                
-            except KeyboardInterrupt:
-                print("\n🛑 Interrompido pelo usuário")
-                break
+                    
+                    # Tenta pegar resultado processado
+                    raw_action = "neutral"
+                    try:
+                        raw_action = self._result_queue.get_nowait()
+                    except queue.Empty:
+                        # Sem resultado ainda, usa neutral
+                        pass
+                    
+                    # Adiciona gesto ao histórico e obtém gesto estável
+                    add_gesture_to_history(raw_action)
+                    action = get_stable_gesture()
+                    
+                    now = time.time()
+                    
+                    # Calibração inicial
+                    if now - self.start_ts < CALIBRATION_S:
+                        if frame_count % 30 == 0:  # Mostra a cada segundo
+                            remaining = int(CALIBRATION_S - (now - self.start_ts))
+                            print(f"⏱️  Calibrando... {remaining}s restantes")
+                    else:
+                        # Lógica de execução de ações
+                        if action == "neutral":
+                            if self.action_executed:
+                                self.action_executed = False
+                                print("✅ Sistema pronto para nova ação")
+                        elif action != "neutral" and not self.action_executed:
+                            if action == "next":
+                                press_next()
+                                print("➡️  PRÓXIMO slide executado")
+                            elif action == "prev":
+                                press_prev()
+                                print("⬅️  ANTERIOR slide executado")
+                            elif action == "home":
+                                press_home()
+                                print("🏠 INÍCIO da apresentação")
+                            elif action == "end":
+                                press_end()
+                                print("🔚 FIM da apresentação")
+                            self.action_executed = True
+                            self.last_action = action
+                        elif action != "neutral" and self.action_executed:
+                            # Não mostra mensagem repetitiva, apenas aguarda
+                            pass
+                    
+                    frame_count += 1
+                    time.sleep(0.01)  # ~100 FPS captura, processamento assíncrono
+                    
+                except KeyboardInterrupt:
+                    print("\n🛑 Interrompido pelo usuário")
+                    break
+        finally:
+            # Para thread de processamento
+            self._processing_active = False
+            processor_thread.join(timeout=1.0)
                 
     def stop_detection(self):
         self.is_running = False
+        self._processing_active = False
+        
+        # Limpa filas
+        while not self._frame_queue.empty():
+            try:
+                self._frame_queue.get_nowait()
+            except queue.Empty:
+                break
+        while not self._result_queue.empty():
+            try:
+                self._result_queue.get_nowait()
+            except queue.Empty:
+                break
+        
         if self.cap:
             self.cap.release()
+        
+        # Finaliza executor
+        self._executor.shutdown(wait=False)
+        
         print("📷 Câmera desconectada")
         print("👋 WaveControl CLI finalizado")
 
