@@ -213,12 +213,12 @@ class WaveControlGUI(Gtk.Window):
             background: @theme_bg_color;
         }
         
-        /* Header moderno */
+        /* Header moderno com gradiente sutil */
         .header-toolbar {
             padding: 16px 24px;
-            background: @theme_bg_color;
+            background: linear-gradient(to bottom, @theme_bg_color, alpha(@theme_bg_color, 0.98));
             border-bottom: 1px solid alpha(@borders, 0.3);
-            box-shadow: 0 1px 3px alpha(black, 0.1);
+            box-shadow: 0 2px 4px alpha(black, 0.08);
             min-height: 52px;
         }
         
@@ -262,19 +262,20 @@ class WaveControlGUI(Gtk.Window):
             color: alpha(@theme_fg_color, 0.7);
         }
         
-        /* Cards harmonioso */
+        /* Cards harmonioso com micro-interações */
         .compact-card {
             background: @theme_base_color;
             border: 1px solid alpha(@borders, 0.2);
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 16px;
             margin-bottom: 0;
             box-shadow: 0 1px 3px alpha(black, 0.05);
-            transition: all 200ms ease;
+            transition: all 250ms cubic-bezier(0.4, 0.0, 0.2, 1);
         }
         
         .compact-card:hover {
-            box-shadow: 0 2px 6px alpha(black, 0.1);
+            box-shadow: 0 4px 12px alpha(black, 0.12);
+            border-color: alpha(@theme_selected_bg_color, 0.3);
         }
         
         .card-title {
@@ -286,18 +287,23 @@ class WaveControlGUI(Gtk.Window):
             padding-bottom: 6px;
         }
         
-        /* Botões modernos */
+        /* Botões modernos com feedback visual */
         .primary-button {
             padding: 10px 20px;
-            border-radius: 6px;
+            border-radius: 8px;
             font-weight: 600;
             min-height: 40px;
             min-width: 100px;
-            transition: all 200ms ease;
+            transition: all 200ms cubic-bezier(0.4, 0.0, 0.2, 1);
+            box-shadow: 0 1px 3px alpha(black, 0.1);
         }
         
         .primary-button:hover {
-            box-shadow: 0 2px 4px alpha(black, 0.15);
+            box-shadow: 0 4px 8px alpha(black, 0.2);
+        }
+        
+        .primary-button:active {
+            box-shadow: 0 1px 2px alpha(black, 0.15);
         }
         
         .secondary-button {
@@ -321,6 +327,33 @@ class WaveControlGUI(Gtk.Window):
             background: @theme_selected_bg_color;
             color: @theme_selected_fg_color;
             box-shadow: 0 1px 2px alpha(black, 0.1);
+            transition: all 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+        
+        /* Indicadores de gestos específicos com cores */
+        .gesture-next {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .gesture-prev {
+            background: #2196F3;
+            color: white;
+        }
+        
+        .gesture-home {
+            background: #FF9800;
+            color: white;
+        }
+        
+        .gesture-end {
+            background: #F44336;
+            color: white;
+        }
+        
+        .gesture-neutral {
+            background: alpha(@theme_fg_color, 0.2);
+            color: @theme_fg_color;
         }
         
         .status-grid {
@@ -439,6 +472,7 @@ class WaveControlGUI(Gtk.Window):
         self.header_start_button = Gtk.Button.new_with_label("▶ Iniciar")
         self.header_start_button.get_style_context().add_class("primary-button")
         self.header_start_button.connect("clicked", self.on_start_clicked)
+        self.header_start_button.set_tooltip_text("Inicia ou para a detecção de gestos")
         
         header_right.pack_start(self.header_start_button, False, False, 0)
         
@@ -531,18 +565,22 @@ class WaveControlGUI(Gtk.Window):
         self.zoom_1x_btn = Gtk.Button.new_with_label("1x")
         self.zoom_1x_btn.get_style_context().add_class("secondary-button")
         self.zoom_1x_btn.connect("clicked", lambda btn: self.set_zoom(1.0))
+        self.zoom_1x_btn.set_tooltip_text("Sem zoom (padrão)")
         
         self.zoom_2x_btn = Gtk.Button.new_with_label("2x")
         self.zoom_2x_btn.get_style_context().add_class("secondary-button")
         self.zoom_2x_btn.connect("clicked", lambda btn: self.set_zoom(2.0))
+        self.zoom_2x_btn.set_tooltip_text("Zoom 2x - aproxima a imagem")
         
         self.zoom_3x_btn = Gtk.Button.new_with_label("3x")
         self.zoom_3x_btn.get_style_context().add_class("secondary-button")
         self.zoom_3x_btn.connect("clicked", lambda btn: self.set_zoom(3.0))
+        self.zoom_3x_btn.set_tooltip_text("Zoom 3x - aproxima mais")
         
         self.zoom_4x_btn = Gtk.Button.new_with_label("4x")
         self.zoom_4x_btn.get_style_context().add_class("secondary-button")
         self.zoom_4x_btn.connect("clicked", lambda btn: self.set_zoom(4.0))
+        self.zoom_4x_btn.set_tooltip_text("Zoom 4x - máximo aproximação")
         
         zoom_buttons_row.pack_start(self.zoom_1x_btn, True, True, 0)
         zoom_buttons_row.pack_start(self.zoom_2x_btn, True, True, 0)
@@ -583,6 +621,8 @@ class WaveControlGUI(Gtk.Window):
         
         self.action_indicator = Gtk.Label(label="neutral")
         self.action_indicator.get_style_context().add_class("status-indicator")
+        self.action_indicator.get_style_context().add_class("gesture-neutral")
+        self.action_indicator.set_tooltip_text("Gesto detectado atualmente")
         
         action_item.pack_start(action_label, False, False, 0)
         action_item.pack_end(self.action_indicator, False, False, 0)
@@ -596,6 +636,7 @@ class WaveControlGUI(Gtk.Window):
         
         self.filter_label = Gtk.Label(label="0/8")
         self.filter_label.get_style_context().add_class("status-indicator")
+        self.filter_label.set_tooltip_text("Filtro temporal de gestos (frames consistentes/total)")
         
         filter_item.pack_start(filter_label, False, False, 0)
         filter_item.pack_end(self.filter_label, False, False, 0)
@@ -609,6 +650,7 @@ class WaveControlGUI(Gtk.Window):
         
         self.fps_label = Gtk.Label(label="0.0")
         self.fps_label.get_style_context().add_class("status-indicator")
+        self.fps_label.set_tooltip_text("Taxa de quadros por segundo (FPS) - performance do sistema")
         
         fps_item.pack_start(fps_label, False, False, 0)
         fps_item.pack_end(self.fps_label, False, False, 0)
@@ -633,6 +675,7 @@ class WaveControlGUI(Gtk.Window):
         # Checkbox compacto
         self.show_landmarks_check = Gtk.CheckButton.new_with_label("Mostrar landmarks")
         self.show_landmarks_check.set_active(DRAW)
+        self.show_landmarks_check.set_tooltip_text("Mostra pontos de rastreamento da mão no vídeo")
         
         config_card.pack_start(config_title, False, False, 0)
         config_card.pack_start(self.show_landmarks_check, False, False, 0)
@@ -659,6 +702,7 @@ class WaveControlGUI(Gtk.Window):
         
         self.total_gestures_label = Gtk.Label(label="0")
         self.total_gestures_label.get_style_context().add_class("status-indicator")
+        self.total_gestures_label.set_tooltip_text("Total de gestos executados nesta sessão")
         
         gestures_item.pack_start(gestures_label, False, False, 0)
         gestures_item.pack_end(self.total_gestures_label, False, False, 0)
@@ -672,6 +716,7 @@ class WaveControlGUI(Gtk.Window):
         
         self.total_frames_label = Gtk.Label(label="0")
         self.total_frames_label.get_style_context().add_class("status-indicator")
+        self.total_frames_label.set_tooltip_text("Total de frames processados pelo sistema")
         
         frames_item.pack_start(frames_label, False, False, 0)
         frames_item.pack_end(self.total_frames_label, False, False, 0)
@@ -987,8 +1032,18 @@ class WaveControlGUI(Gtk.Window):
                         GLib.idle_add(self.header_status.set_text, "Aguardando...")
                         GLib.idle_add(self.status_label.set_text, "Aguardando posição neutra")
                 
-                # Atualiza indicadores de status
-                GLib.idle_add(self.action_indicator.set_text, action)
+                # Atualiza indicadores de status com feedback visual
+                def update_gesture_indicator(gesture):
+                    # Remove classes antigas
+                    ctx = self.action_indicator.get_style_context()
+                    for cls in ["gesture-next", "gesture-prev", "gesture-home", "gesture-end", "gesture-neutral"]:
+                        ctx.remove_class(cls)
+                    
+                    # Adiciona classe específica do gesto
+                    ctx.add_class(f"gesture-{gesture}")
+                    self.action_indicator.set_text(gesture)
+                
+                GLib.idle_add(update_gesture_indicator, action)
                 GLib.idle_add(self.filter_label.set_text, f"{len(gesture_history)}/{GESTURE_WINDOW_SIZE}")
                 
                 # Atualiza FPS e métricas
