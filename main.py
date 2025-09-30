@@ -7,6 +7,8 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib, GdkPixbuf, Gdk
 import threading
+from functools import lru_cache
+from collections import Counter
 
 # ===== Configurações =====
 MIN_DET = 0.6
@@ -31,16 +33,27 @@ kb = uinput.Device([uinput.KEY_RIGHT, uinput.KEY_LEFT, uinput.KEY_HOME, uinput.K
 # ===== MediaPipe =====
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
-hands = mp_hands.Hands(
-    max_num_hands=1,
-    model_complexity=0,
-    min_detection_confidence=MIN_DET,
-    min_tracking_confidence=MIN_TRK,
-)
+
+# Cache de instância do MediaPipe
+@lru_cache(maxsize=1)
+def get_mediapipe_hands():
+    """Retorna instância cacheada do MediaPipe Hands"""
+    return mp_hands.Hands(
+        max_num_hands=1,
+        model_complexity=0,
+        min_detection_confidence=MIN_DET,
+        min_tracking_confidence=MIN_TRK,
+    )
+
+hands = get_mediapipe_hands()
 
 # ===== Utilidades de dedos =====
 TIP = { "thumb": 4, "index": 8, "middle": 12, "ring": 16, "pinky": 20 }
 PIP = { "thumb": 3, "index": 6, "middle": 10, "ring": 14, "pinky": 18 }
+
+# Cache para thresholds
+_THUMB_THRESHOLD = 0.05
+_FINGER_THRESHOLD = 0.05
 
 def finger_extended(lm, tip_idx, pip_idx, handed_label):
     tip = lm[tip_idx]
@@ -48,15 +61,18 @@ def finger_extended(lm, tip_idx, pip_idx, handed_label):
     if tip_idx == TIP["thumb"]:
         # polegar: eixo X depende da mão (mais rigoroso)
         if handed_label == "Right":
-            return tip.x < pip.x - 0.05
+            return tip.x < pip.x - _THUMB_THRESHOLD
         else:
-            return tip.x > pip.x + 0.05
+            return tip.x > pip.x + _THUMB_THRESHOLD
     # demais dedos: eixo Y (origem no topo) - mais rigoroso
-    return tip.y < pip.y - 0.05
+    return tip.y < pip.y - _FINGER_THRESHOLD
+
+# Cache para ordem de dedos
+_FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
 
 def count_extended(lm, handed_label):
     cnt = 0
-    for name in ["thumb","index","middle","ring","pinky"]:
+    for name in _FINGER_NAMES:
         if finger_extended(lm, TIP[name], PIP[name], handed_label):
             cnt += 1
     return cnt
@@ -71,21 +87,18 @@ def add_gesture_to_history(gesture):
         gesture_history.pop(0)
 
 def get_stable_gesture():
-    """Retorna gesto estável baseado no histórico ou 'neutral' se inconsistente"""
+    """Retorna gesto estável baseado no histórico - otimizado com Counter"""
     if len(gesture_history) < GESTURE_WINDOW_SIZE:
         return "neutral"  # aguarda janela completa
     
-    # Conta ocorrências de cada gesto
-    gesture_counts = {}
-    for gesture in gesture_history:
-        gesture_counts[gesture] = gesture_counts.get(gesture, 0) + 1
+    # Usa Counter para contar eficientemente
+    gesture_counts = Counter(gesture_history)
     
     # Encontra o gesto mais frequente
-    most_common_gesture = max(gesture_counts, key=gesture_counts.get)
-    most_common_count = gesture_counts[most_common_gesture]
+    most_common_gesture, most_common_count = gesture_counts.most_common(1)[0]
     
     # Verifica se atende o threshold de consistência
-    consistency_ratio = most_common_count / len(gesture_history)
+    consistency_ratio = most_common_count / GESTURE_WINDOW_SIZE
     
     if consistency_ratio >= CONSISTENCY_THRESHOLD and most_common_gesture != "neutral":
         return most_common_gesture
@@ -93,14 +106,17 @@ def get_stable_gesture():
     return "neutral"
 
 # ===== Gesto -> Ação =====
-# 1 dedo: próximo; 2 dedos: anterior; 3 dedos: início; 4 dedos: fim; senão: neutro
+# Cache de mapeamento (dict lookup mais rápido)
+_GESTURE_MAP = {
+    1: "next",
+    2: "prev",
+    3: "home",
+    4: "end",
+}
+
 def classify_gesture(lm, handed_label):
     n = count_extended(lm, handed_label)
-    if n == 1: return "next"      # um dedo levantado
-    if n == 2: return "prev"      # dois dedos levantados
-    if n == 3: return "home"      # três dedos levantados
-    if n == 4: return "end"       # quatro dedos levantados
-    return "neutral"
+    return _GESTURE_MAP.get(n, "neutral")
 
 def press_next():
     kb.emit_click(uinput.KEY_RIGHT)
@@ -160,6 +176,10 @@ class WaveControlGUI(Gtk.Window):
         self.last_action = "neutral"
         self.action_executed = False
         self.zoom_level = DEFAULT_ZOOM
+        
+        # Frame pooling para reduzir alocações
+        self._frame_buffer = None
+        self._rgb_buffer = None
         
         # Setup da interface
         self.setup_ui()
@@ -728,12 +748,20 @@ class WaveControlGUI(Gtk.Window):
             if not ok:
                 break
                 
+            # Frame pooling: reutiliza buffers pré-alocados
             frame = cv2.flip(frame, 1)
             
             # Aplica zoom digital se necessário
             frame = apply_digital_zoom(frame, self.zoom_level)
             
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Reutiliza buffers quando possível
+            if self._rgb_buffer is None or self._rgb_buffer.shape != frame.shape:
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                self._rgb_buffer = rgb
+            else:
+                cv2.cvtColor(frame, cv2.COLOR_BGR2RGB, dst=self._rgb_buffer)
+                rgb = self._rgb_buffer
+            
             res = hands.process(rgb)
             
             raw_action = "neutral"
