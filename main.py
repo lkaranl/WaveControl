@@ -9,6 +9,8 @@ from gi.repository import Gtk, GLib, GdkPixbuf, Gdk
 import threading
 from functools import lru_cache
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+import queue
 
 # ===== Configurações =====
 MIN_DET = 0.6
@@ -180,6 +182,12 @@ class WaveControlGUI(Gtk.Window):
         # Frame pooling para reduzir alocações
         self._frame_buffer = None
         self._rgb_buffer = None
+        
+        # Thread pool para processamento assíncrono
+        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="wavecontrol")
+        self._frame_queue = queue.Queue(maxsize=2)
+        self._result_queue = queue.Queue(maxsize=2)
+        self._processing_active = False
         
         # Setup da interface
         self.setup_ui()
@@ -742,131 +750,206 @@ class WaveControlGUI(Gtk.Window):
         self.action_indicator.set_text("neutral")
         self.filter_label.set_text("0/8")
         
-    def process_video(self):
-        while self.is_running and self.cap and self.cap.isOpened():
-            ok, frame = self.cap.read()
-            if not ok:
-                break
-                
-            # Frame pooling: reutiliza buffers pré-alocados
-            frame = cv2.flip(frame, 1)
-            
-            # Aplica zoom digital se necessário
-            frame = apply_digital_zoom(frame, self.zoom_level)
-            
-            # Reutiliza buffers quando possível
-            if self._rgb_buffer is None or self._rgb_buffer.shape != frame.shape:
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                self._rgb_buffer = rgb
-            else:
-                cv2.cvtColor(frame, cv2.COLOR_BGR2RGB, dst=self._rgb_buffer)
-                rgb = self._rgb_buffer
-            
-            res = hands.process(rgb)
-            
-            raw_action = "neutral"
-            handed = "Right"
-            
-            if res.multi_hand_landmarks:
-                lm = res.multi_hand_landmarks[0]
-                if res.multi_handedness and len(res.multi_handedness) > 0:
-                    handed = res.multi_handedness[0].classification[0].label
-                raw_action = classify_gesture(lm.landmark, handed)
-            
-            # Adiciona gesto ao histórico e obtém gesto estável
-            add_gesture_to_history(raw_action)
-            action = get_stable_gesture()
+    def _process_frame_async(self, frame_data):
+        """Processa frame em thread separada"""
+        frame, zoom_level, show_landmarks = frame_data
+        
+        # Frame pooling: reutiliza buffers pré-alocados
+        frame = cv2.flip(frame, 1)
+        
+        # Aplica zoom digital se necessário
+        frame = apply_digital_zoom(frame, zoom_level)
+        
+        # Reutiliza buffers quando possível
+        if self._rgb_buffer is None or self._rgb_buffer.shape != frame.shape:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            self._rgb_buffer = rgb
+        else:
+            cv2.cvtColor(frame, cv2.COLOR_BGR2RGB, dst=self._rgb_buffer)
+            rgb = self._rgb_buffer
+        
+        res = hands.process(rgb)
+        
+        raw_action = "neutral"
+        handed = "Right"
+        
+        if res.multi_hand_landmarks:
+            lm = res.multi_hand_landmarks[0]
+            if res.multi_handedness and len(res.multi_handedness) > 0:
+                handed = res.multi_handedness[0].classification[0].label
+            raw_action = classify_gesture(lm.landmark, handed)
             
             # Desenha landmarks se habilitado
-            if res.multi_hand_landmarks and self.show_landmarks_check.get_active():
-                lm = res.multi_hand_landmarks[0]
+            if show_landmarks:
                 mp_drawing.draw_landmarks(
                     frame, lm, mp_hands.HAND_CONNECTIONS,
                     mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2),
                     mp_drawing.DrawingSpec(color=(255,0,0), thickness=2)
                 )
-            
-            now = time.time()
-            
-            # Informações visuais na tela
-            if self.zoom_level > 1.0:
-                zoom_text = f"Zoom: {self.zoom_level:.1f}x"
-                cv2.putText(frame, zoom_text, (20, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
-            
-            # Calibração inicial
-            if now - self.start_ts < CALIBRATION_S:
-                cv2.putText(frame, "Calibrando...", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
-                GLib.idle_add(self.header_status.set_text, "Calibrando...")
-                GLib.idle_add(self.status_label.set_text, "Sistema calibrando...")
-            else:
-                # Lógica de execução de ações
-                if action == "neutral":
-                    if self.action_executed:
-                        self.action_executed = False
-                        GLib.idle_add(self.header_status.set_text, "Ativo")
-                        GLib.idle_add(self.status_label.set_text, "Sistema ativo - Pronto")
-                elif action != "neutral" and not self.action_executed:
-                    if action == "next":
-                        press_next()
-                        GLib.idle_add(self.header_status.set_text, "Próximo →")
-                        GLib.idle_add(self.status_label.set_text, "Próximo slide executado")
-                    elif action == "prev":
-                        press_prev()
-                        GLib.idle_add(self.header_status.set_text, "← Anterior")
-                        GLib.idle_add(self.status_label.set_text, "Slide anterior executado")
-                    elif action == "home":
-                        press_home()
-                        GLib.idle_add(self.header_status.set_text, "⏮ Início")
-                        GLib.idle_add(self.status_label.set_text, "Indo para o início")
-                    elif action == "end":
-                        press_end()
-                        GLib.idle_add(self.header_status.set_text, "⏭ Fim")
-                        GLib.idle_add(self.status_label.set_text, "Indo para o fim")
-                    self.action_executed = True
-                    self.last_action = action
-                elif action != "neutral" and self.action_executed:
-                    GLib.idle_add(self.header_status.set_text, "Aguardando...")
-                    GLib.idle_add(self.status_label.set_text, "Aguardando posição neutra")
-            
-            # Atualiza indicadores de status
-            GLib.idle_add(self.action_indicator.set_text, action)
-            GLib.idle_add(self.filter_label.set_text, f"{len(gesture_history)}/{GESTURE_WINDOW_SIZE}")
-            
-            # Converte frame para exibição na GUI
-            height, width, channels = frame.shape
-            pixbuf = GdkPixbuf.Pixbuf.new_from_data(
-                frame.tobytes(),
-                GdkPixbuf.Colorspace.RGB,
-                False,
-                8,
-                width,
-                height,
-                width * channels
-            )
-            
-            # Redimensiona mantendo proporção
-            original_width = pixbuf.get_width()
-            original_height = pixbuf.get_height()
-            
-            # Calcula nova dimensão responsiva - cresce conforme a tela
-            available_height = self.get_allocated_height() - 120  # Altura disponível menos header e footer
-            available_width = self.get_allocated_width() - 320    # Largura disponível menos sidebar
-            
-            # Calcula escala baseada no espaço disponível
-            scale_height = available_height / original_height
-            scale_width = available_width / original_width
-            scale_factor = min(scale_height, scale_width, 1)  # Limita a 1x para evitar loop
-            
-            new_width = int(original_width * scale_factor)
-            new_height = int(original_height * scale_factor)
+        
+        return raw_action, frame, res
+    
+    def _gesture_processor_thread(self):
+        """Thread dedicada para processar gestos de forma assíncrona"""
+        while self._processing_active:
+            try:
+                frame_data = self._frame_queue.get(timeout=0.1)
+                result = self._process_frame_async(frame_data)
                 
-            pixbuf = pixbuf.scale_simple(new_width, new_height, GdkPixbuf.InterpType.BILINEAR)
-            GLib.idle_add(self.video_image.set_from_pixbuf, pixbuf)
+                try:
+                    self._result_queue.put(result, block=False)
+                except queue.Full:
+                    try:
+                        self._result_queue.get_nowait()
+                    except queue.Empty:
+                        pass
+                    self._result_queue.put(result, block=False)
+                    
+            except queue.Empty:
+                continue
+            except Exception as e:
+                continue
+    
+    def process_video(self):
+        # Inicia thread de processamento assíncrono
+        self._processing_active = True
+        processor_thread = threading.Thread(target=self._gesture_processor_thread, daemon=True)
+        processor_thread.start()
+        
+        try:
+            while self.is_running and self.cap and self.cap.isOpened():
+                ok, frame = self.cap.read()
+                if not ok:
+                    break
+                
+                # Envia frame para processamento assíncrono
+                try:
+                    frame_data = (frame.copy(), self.zoom_level, self.show_landmarks_check.get_active())
+                    self._frame_queue.put(frame_data, block=False)
+                except queue.Full:
+                    pass
+                
+                # Tenta pegar resultado processado
+                raw_action = "neutral"
+                processed_frame = None
+                res = None
+                
+                try:
+                    raw_action, processed_frame, res = self._result_queue.get_nowait()
+                except queue.Empty:
+                    continue
+                
+                if processed_frame is None:
+                    continue
+                
+                # Adiciona gesto ao histórico e obtém gesto estável
+                add_gesture_to_history(raw_action)
+                action = get_stable_gesture()
+                
+                frame = processed_frame
             
-            time.sleep(0.03)  # ~30 FPS
+                now = time.time()
+            
+                # Informações visuais na tela
+                if self.zoom_level > 1.0:
+                    zoom_text = f"Zoom: {self.zoom_level:.1f}x"
+                    cv2.putText(frame, zoom_text, (20, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+                
+                # Calibração inicial
+                if now - self.start_ts < CALIBRATION_S:
+                    cv2.putText(frame, "Calibrando...", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
+                    GLib.idle_add(self.header_status.set_text, "Calibrando...")
+                    GLib.idle_add(self.status_label.set_text, "Sistema calibrando...")
+                else:
+                    # Lógica de execução de ações
+                    if action == "neutral":
+                        if self.action_executed:
+                            self.action_executed = False
+                            GLib.idle_add(self.header_status.set_text, "Ativo")
+                            GLib.idle_add(self.status_label.set_text, "Sistema ativo - Pronto")
+                    elif action != "neutral" and not self.action_executed:
+                        if action == "next":
+                            press_next()
+                            GLib.idle_add(self.header_status.set_text, "Próximo →")
+                            GLib.idle_add(self.status_label.set_text, "Próximo slide executado")
+                        elif action == "prev":
+                            press_prev()
+                            GLib.idle_add(self.header_status.set_text, "← Anterior")
+                            GLib.idle_add(self.status_label.set_text, "Slide anterior executado")
+                        elif action == "home":
+                            press_home()
+                            GLib.idle_add(self.header_status.set_text, "⏮ Início")
+                            GLib.idle_add(self.status_label.set_text, "Indo para o início")
+                        elif action == "end":
+                            press_end()
+                            GLib.idle_add(self.header_status.set_text, "⏭ Fim")
+                            GLib.idle_add(self.status_label.set_text, "Indo para o fim")
+                        self.action_executed = True
+                        self.last_action = action
+                    elif action != "neutral" and self.action_executed:
+                        GLib.idle_add(self.header_status.set_text, "Aguardando...")
+                        GLib.idle_add(self.status_label.set_text, "Aguardando posição neutra")
+                
+                # Atualiza indicadores de status
+                GLib.idle_add(self.action_indicator.set_text, action)
+                GLib.idle_add(self.filter_label.set_text, f"{len(gesture_history)}/{GESTURE_WINDOW_SIZE}")
+                
+                # Converte frame para exibição na GUI
+                height, width, channels = frame.shape
+                pixbuf = GdkPixbuf.Pixbuf.new_from_data(
+                    frame.tobytes(),
+                    GdkPixbuf.Colorspace.RGB,
+                    False,
+                    8,
+                    width,
+                    height,
+                    width * channels
+                )
+                
+                # Redimensiona mantendo proporção
+                original_width = pixbuf.get_width()
+                original_height = pixbuf.get_height()
+                
+                # Calcula nova dimensão responsiva
+                available_height = self.get_allocated_height() - 120
+                available_width = self.get_allocated_width() - 320
+                
+                # Calcula escala baseada no espaço disponível
+                scale_height = available_height / original_height
+                scale_width = available_width / original_width
+                scale_factor = min(scale_height, scale_width, 1)
+                
+                new_width = int(original_width * scale_factor)
+                new_height = int(original_height * scale_factor)
+                    
+                pixbuf = pixbuf.scale_simple(new_width, new_height, GdkPixbuf.InterpType.BILINEAR)
+                GLib.idle_add(self.video_image.set_from_pixbuf, pixbuf)
+                
+                time.sleep(0.01)  # ~100 FPS captura, processamento assíncrono
+        finally:
+            # Para thread de processamento
+            self._processing_active = False
+            processor_thread.join(timeout=1.0)
             
     def on_window_destroy(self, window):
         self.stop_detection()
+        self._processing_active = False
+        
+        # Limpa filas
+        while not self._frame_queue.empty():
+            try:
+                self._frame_queue.get_nowait()
+            except queue.Empty:
+                break
+        while not self._result_queue.empty():
+            try:
+                self._result_queue.get_nowait()
+            except queue.Empty:
+                break
+        
+        # Finaliza executor
+        self._executor.shutdown(wait=False)
+        
         hands.close()
         Gtk.main_quit()
 
