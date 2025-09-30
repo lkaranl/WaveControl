@@ -54,21 +54,55 @@ hands = get_mediapipe_hands()
 TIP = { "thumb": 4, "index": 8, "middle": 12, "ring": 16, "pinky": 20 }
 PIP = { "thumb": 3, "index": 6, "middle": 10, "ring": 14, "pinky": 18 }
 
-# Cache para thresholds
+# Cache para thresholds adaptativos
 _THUMB_THRESHOLD = 0.05
 _FINGER_THRESHOLD = 0.05
 
+# MCP indices (base dos dedos) para melhor detecção
+MCP = { "index": 5, "middle": 9, "ring": 13, "pinky": 17 }
+
 def finger_extended(lm, tip_idx, pip_idx, handed_label):
+    """
+    Detecção melhorada de dedo estendido
+    Usa múltiplos pontos para maior precisão
+    """
     tip = lm[tip_idx]
     pip = lm[pip_idx]
+    
     if tip_idx == TIP["thumb"]:
-        # polegar: eixo X depende da mão (mais rigoroso)
+        # Polegar: usa IP (joint 3) e MCP (joint 2) para melhor precisão
+        ip_joint = lm[3]
+        mcp_joint = lm[2]
+        
         if handed_label == "Right":
-            return tip.x < pip.x - _THUMB_THRESHOLD
+            # Verifica se tip está mais à esquerda que IP E MCP
+            return tip.x < ip_joint.x - _THUMB_THRESHOLD and tip.x < mcp_joint.x
         else:
-            return tip.x > pip.x + _THUMB_THRESHOLD
-    # demais dedos: eixo Y (origem no topo) - mais rigoroso
-    return tip.y < pip.y - _FINGER_THRESHOLD
+            # Verifica se tip está mais à direita que IP E MCP
+            return tip.x > ip_joint.x + _THUMB_THRESHOLD and tip.x > mcp_joint.x
+    else:
+        # Outros dedos: usa PIP e MCP para verificação dupla
+        # Encontra nome do dedo
+        finger_name = None
+        for name, idx in TIP.items():
+            if idx == tip_idx:
+                finger_name = name
+                break
+        
+        if finger_name and finger_name in MCP:
+            mcp = lm[MCP[finger_name]]
+            
+            # Verifica se:
+            # 1. TIP está acima do PIP
+            # 2. TIP está acima ou próximo do MCP
+            # 3. A diferença é significativa
+            tip_above_pip = tip.y < pip.y - _FINGER_THRESHOLD
+            tip_above_mcp = tip.y < mcp.y + 0.02  # Mais tolerante com MCP
+            
+            return tip_above_pip and tip_above_mcp
+        
+        # Fallback para método antigo
+        return tip.y < pip.y - _FINGER_THRESHOLD
 
 # Cache para ordem de dedos
 _FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
@@ -90,7 +124,10 @@ def add_gesture_to_history(gesture):
         gesture_history.pop(0)
 
 def get_stable_gesture():
-    """Retorna gesto estável baseado no histórico - otimizado com Counter"""
+    """
+    Retorna gesto estável baseado no histórico - otimizado com Counter
+    Agora com confiança adaptativa
+    """
     if len(gesture_history) < GESTURE_WINDOW_SIZE:
         return "neutral"  # aguarda janela completa
     
@@ -103,10 +140,28 @@ def get_stable_gesture():
     # Verifica se atende o threshold de consistência
     consistency_ratio = most_common_count / GESTURE_WINDOW_SIZE
     
-    if consistency_ratio >= CONSISTENCY_THRESHOLD and most_common_gesture != "neutral":
+    # Threshold adaptativo: se é neutral, requer menos consistência
+    # Se é um gesto de ação, requer mais consistência
+    threshold = CONSISTENCY_THRESHOLD
+    if most_common_gesture == "neutral":
+        threshold = 0.5  # Mais fácil voltar para neutral
+    
+    if consistency_ratio >= threshold and most_common_gesture != "neutral":
         return most_common_gesture
     
     return "neutral"
+
+
+def get_gesture_confidence():
+    """Retorna a confiança do gesto atual (0-100%)"""
+    if len(gesture_history) < GESTURE_WINDOW_SIZE:
+        return 0.0
+    
+    gesture_counts = Counter(gesture_history)
+    most_common_gesture, most_common_count = gesture_counts.most_common(1)[0]
+    
+    confidence = (most_common_count / GESTURE_WINDOW_SIZE) * 100
+    return confidence
 
 # ===== Gesto -> Ação =====
 # Cache de mapeamento (dict lookup mais rápido)
@@ -133,29 +188,104 @@ def press_home():
 def press_end():
     kb.emit_click(uinput.KEY_END)
 
-def apply_digital_zoom(frame, zoom_level):
-    """Aplica zoom digital no frame"""
-    if zoom_level <= 1.0:
-        return frame
+def calculate_hand_size(landmarks):
+    """
+    Calcula o tamanho da mão baseado nos landmarks
+    Retorna a distância entre o pulso e o dedo médio
+    """
+    wrist = landmarks[0]
+    middle_tip = landmarks[12]
     
+    # Calcula distância euclidiana
+    dx = middle_tip.x - wrist.x
+    dy = middle_tip.y - wrist.y
+    distance = (dx * dx + dy * dy) ** 0.5
+    
+    return distance
+
+
+def calculate_hand_center(landmarks):
+    """Calcula o centro da mão baseado nos landmarks"""
+    # Usa média de landmarks chave
+    x_coords = [lm.x for lm in landmarks]
+    y_coords = [lm.y for lm in landmarks]
+    
+    center_x = sum(x_coords) / len(x_coords)
+    center_y = sum(y_coords) / len(y_coords)
+    
+    return center_x, center_y
+
+
+def apply_smart_zoom(frame, landmarks=None, manual_zoom=1.0, enable_auto=True):
+    """
+    Aplica zoom digital inteligente
+    
+    Args:
+        frame: Frame original
+        landmarks: Landmarks da mão (opcional, para auto-zoom)
+        manual_zoom: Nível de zoom manual
+        enable_auto: Habilita auto-zoom baseado na distância da mão
+    
+    Returns:
+        Frame com zoom aplicado
+    """
     height, width = frame.shape[:2]
+    zoom_level = manual_zoom
+    center_x, center_y = 0.5, 0.5  # Centro padrão
     
-    # Calcula o tamanho da região central a ser extraída
+    # Auto-zoom: ajusta baseado no tamanho da mão
+    if enable_auto and landmarks is not None:
+        hand_size = calculate_hand_size(landmarks)
+        center_x, center_y = calculate_hand_center(landmarks)
+        
+        # Ajusta zoom baseado no tamanho da mão
+        # Mão pequena (longe) = mais zoom
+        # Mão grande (perto) = menos zoom
+        if hand_size < 0.15:  # Muito longe
+            auto_zoom = 2.0
+        elif hand_size < 0.25:  # Longe
+            auto_zoom = 1.5
+        elif hand_size < 0.35:  # Distância média
+            auto_zoom = 1.2
+        else:  # Perto
+            auto_zoom = 1.0
+        
+        # Combina zoom manual e automático
+        zoom_level = max(manual_zoom, auto_zoom)
+    
+    if zoom_level <= 1.0:
+        return frame, 1.0
+    
+    # Calcula região a ser extraída (ROI centrado na mão)
     crop_width = int(width / zoom_level)
     crop_height = int(height / zoom_level)
     
-    # Calcula as coordenadas centrais para o crop
-    start_x = (width - crop_width) // 2
-    start_y = (height - crop_height) // 2
+    # Centraliza no centro da mão (com limites)
+    center_x = max(0.0, min(1.0, center_x))
+    center_y = max(0.0, min(1.0, center_y))
+    
+    start_x = int(center_x * width - crop_width / 2)
+    start_y = int(center_y * height - crop_height / 2)
+    
+    # Garante que está dentro dos limites
+    start_x = max(0, min(width - crop_width, start_x))
+    start_y = max(0, min(height - crop_height, start_y))
+    
     end_x = start_x + crop_width
     end_y = start_y + crop_height
     
-    # Extrai a região central
+    # Extrai a região
     cropped = frame[start_y:end_y, start_x:end_x]
     
-    # Redimensiona de volta ao tamanho original
+    # Redimensiona
     zoomed = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
     
+    return zoomed, zoom_level
+
+
+def apply_digital_zoom(frame, zoom_level):
+    """Compatibilidade: aplica zoom digital simples"""
+    zoomed, _ = apply_smart_zoom(frame, landmarks=None, manual_zoom=zoom_level, enable_auto=False)
     return zoomed
 
 # ===== Interface Gráfica GTK =====
@@ -179,6 +309,8 @@ class WaveControlGUI(Gtk.Window):
         self.last_action = "neutral"
         self.action_executed = False
         self.zoom_level = DEFAULT_ZOOM
+        self.auto_zoom_enabled = True  # Auto-zoom inteligente
+        self.current_auto_zoom = 1.0
         
         # Frame pooling para reduzir alocações
         self._frame_buffer = None
@@ -641,6 +773,20 @@ class WaveControlGUI(Gtk.Window):
         filter_item.pack_start(filter_label, False, False, 0)
         filter_item.pack_end(self.filter_label, False, False, 0)
         
+        # Confiança do gesto
+        confidence_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        confidence_item.get_style_context().add_class("status-item")
+        
+        confidence_label = Gtk.Label(label="Confiança:")
+        confidence_label.get_style_context().add_class("status-label")
+        
+        self.confidence_label = Gtk.Label(label="0%")
+        self.confidence_label.get_style_context().add_class("status-indicator")
+        self.confidence_label.set_tooltip_text("Confiança do gesto detectado (maior = mais preciso)")
+        
+        confidence_item.pack_start(confidence_label, False, False, 0)
+        confidence_item.pack_end(self.confidence_label, False, False, 0)
+        
         # FPS
         fps_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         fps_item.get_style_context().add_class("status-item")
@@ -658,6 +804,7 @@ class WaveControlGUI(Gtk.Window):
         status_grid.pack_start(self.status_label, False, False, 0)
         status_grid.pack_start(action_item, False, False, 0)
         status_grid.pack_start(filter_item, False, False, 0)
+        status_grid.pack_start(confidence_item, False, False, 0)
         status_grid.pack_start(fps_item, False, False, 0)
         
         status_card.pack_start(status_title, False, False, 0)
@@ -677,8 +824,15 @@ class WaveControlGUI(Gtk.Window):
         self.show_landmarks_check.set_active(DRAW)
         self.show_landmarks_check.set_tooltip_text("Mostra pontos de rastreamento da mão no vídeo")
         
+        # Auto-zoom
+        self.auto_zoom_check = Gtk.CheckButton.new_with_label("Auto-zoom inteligente")
+        self.auto_zoom_check.set_active(True)
+        self.auto_zoom_check.set_tooltip_text("Ajusta zoom automaticamente baseado na distância da mão")
+        self.auto_zoom_check.connect("toggled", self.on_auto_zoom_toggled)
+        
         config_card.pack_start(config_title, False, False, 0)
         config_card.pack_start(self.show_landmarks_check, False, False, 0)
+        config_card.pack_start(self.auto_zoom_check, False, False, 0)
         sidebar.pack_start(config_card, False, False, 0)
         
         # Card de Métricas (Analytics)
@@ -799,6 +953,9 @@ class WaveControlGUI(Gtk.Window):
         self.zoom_scale.set_value(zoom_value)
         self.zoom_value_label.set_text(f"{zoom_value:.1f}x")
     
+    def on_auto_zoom_toggled(self, checkbox):
+        self.auto_zoom_enabled = checkbox.get_active()
+    
     def on_start_clicked(self, button):
         if not self.is_running:
             self.start_detection()
@@ -871,6 +1028,7 @@ class WaveControlGUI(Gtk.Window):
         # Reset dos indicadores
         self.action_indicator.set_text("neutral")
         self.filter_label.set_text("0/8")
+        self.confidence_label.set_text("0%")
         self.fps_label.set_text("0.0")
         
         # Reset métricas
@@ -887,8 +1045,22 @@ class WaveControlGUI(Gtk.Window):
         # Frame pooling: reutiliza buffers pré-alocados
         frame = cv2.flip(frame, 1)
         
-        # Aplica zoom digital se necessário
-        frame = apply_digital_zoom(frame, zoom_level)
+        # Primeiro processa para detectar mão (antes do zoom)
+        temp_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        temp_res = hands.process(temp_rgb)
+        
+        # Pega landmarks se disponível
+        hand_landmarks = None
+        if temp_res.multi_hand_landmarks:
+            hand_landmarks = temp_res.multi_hand_landmarks[0].landmark
+        
+        # Aplica zoom inteligente (auto + manual)
+        frame, actual_zoom = apply_smart_zoom(
+            frame,
+            landmarks=hand_landmarks,
+            manual_zoom=zoom_level,
+            enable_auto=self.auto_zoom_enabled if hasattr(self, 'auto_zoom_enabled') else False
+        )
         
         # Reutiliza buffers quando possível
         if self._rgb_buffer is None or self._rgb_buffer.shape != frame.shape:
@@ -983,14 +1155,17 @@ class WaveControlGUI(Gtk.Window):
                 # Adiciona gesto ao histórico e obtém gesto estável
                 add_gesture_to_history(raw_action)
                 action = get_stable_gesture()
+                gesture_confidence = get_gesture_confidence()
                 
                 frame = processed_frame
             
                 now = time.time()
             
                 # Informações visuais na tela
-                if self.zoom_level > 1.0:
-                    zoom_text = f"Zoom: {self.zoom_level:.1f}x"
+                if hasattr(self, 'current_auto_zoom') and self.current_auto_zoom > 1.0:
+                    zoom_text = f"Zoom: {self.current_auto_zoom:.1f}x"
+                    if self.auto_zoom_enabled:
+                        zoom_text += " (Auto)"
                     cv2.putText(frame, zoom_text, (20, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
                 
                 # Calibração inicial
@@ -1045,6 +1220,7 @@ class WaveControlGUI(Gtk.Window):
                 
                 GLib.idle_add(update_gesture_indicator, action)
                 GLib.idle_add(self.filter_label.set_text, f"{len(gesture_history)}/{GESTURE_WINDOW_SIZE}")
+                GLib.idle_add(self.confidence_label.set_text, f"{gesture_confidence:.0f}%")
                 
                 # Atualiza FPS e métricas
                 stats = self.analytics.get_stats_summary()
