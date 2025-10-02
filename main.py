@@ -10,7 +10,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib, GdkPixbuf, Gdk
 import threading
 from functools import lru_cache
-from collections import Counter
+from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor
 import queue
 from analytics import get_analytics
@@ -170,6 +170,10 @@ def get_mediapipe_hands():
 
 hands = get_mediapipe_hands()
 
+# Pre-allocated DrawingSpecs para melhor performance (evita criar toda vez)
+_LANDMARK_DRAWING_SPEC = mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2)
+_CONNECTION_DRAWING_SPEC = mp_drawing.DrawingSpec(color=(255,0,0), thickness=2)
+
 # ===== Utilidades de dedos =====
 TIP = { "thumb": 4, "index": 8, "middle": 12, "ring": 16, "pinky": 20 }
 PIP = { "thumb": 3, "index": 6, "middle": 10, "ring": 14, "pinky": 18 }
@@ -250,24 +254,48 @@ def get_extended_fingers(lm, handed_label):
     return extended
 
 # ===== Histórico de Gestos =====
-gesture_history = []
+# Usa deque para O(1) append e popleft (muito mais rápido que list)
+gesture_history = deque(maxlen=GESTURE_WINDOW_SIZE)
+
+# Cache do último Counter calculado para evitar recálculos
+_last_gesture_counts = None
+_last_history_snapshot = None
 
 def add_gesture_to_history(gesture):
-    """Adiciona gesto ao histórico e mantém tamanho da janela"""
+    """Adiciona gesto ao histórico - O(1) com deque"""
+    global _last_gesture_counts, _last_history_snapshot
     gesture_history.append(gesture)
-    if len(gesture_history) > GESTURE_WINDOW_SIZE:
-        gesture_history.pop(0)
+    # Invalida cache quando histórico muda
+    _last_gesture_counts = None
+    _last_history_snapshot = None
+
+def _get_gesture_counts():
+    """Retorna Counter do histórico (cacheado quando possível)"""
+    global _last_gesture_counts, _last_history_snapshot
+    
+    # Cria snapshot do histórico atual
+    current_snapshot = tuple(gesture_history)
+    
+    # Se histórico não mudou, retorna cache
+    if current_snapshot == _last_history_snapshot and _last_gesture_counts is not None:
+        return _last_gesture_counts
+    
+    # Recalcula Counter
+    _last_gesture_counts = Counter(gesture_history)
+    _last_history_snapshot = current_snapshot
+    
+    return _last_gesture_counts
 
 def get_stable_gesture():
     """
-    Retorna gesto estável baseado no histórico - otimizado com Counter
-    Agora com confiança adaptativa e mais sensível
+    Retorna gesto estável baseado no histórico - OTIMIZADO
+    Usa cache para evitar recalcular Counter toda vez
     """
     if len(gesture_history) < 4:  # Reduzido para responder mais rápido
         return "neutral"
     
-    # Usa Counter para contar eficientemente
-    gesture_counts = Counter(gesture_history)
+    # Usa Counter cacheado
+    gesture_counts = _get_gesture_counts()
     
     # Encontra o gesto mais frequente
     most_common_gesture, most_common_count = gesture_counts.most_common(1)[0]
@@ -289,11 +317,12 @@ def get_stable_gesture():
 
 
 def get_gesture_confidence():
-    """Retorna a confiança do gesto atual (0-100%)"""
+    """Retorna a confiança do gesto atual (0-100%) - OTIMIZADO"""
     if len(gesture_history) < GESTURE_WINDOW_SIZE:
         return 0.0
     
-    gesture_counts = Counter(gesture_history)
+    # Usa Counter cacheado
+    gesture_counts = _get_gesture_counts()
     most_common_gesture, most_common_count = gesture_counts.most_common(1)[0]
     
     confidence = (most_common_count / GESTURE_WINDOW_SIZE) * 100
@@ -1284,8 +1313,8 @@ class WaveControlGUI(Gtk.Window):
             if show_landmarks:
                 mp_drawing.draw_landmarks(
                     frame, lm, mp_hands.HAND_CONNECTIONS,
-                    mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2),
-                    mp_drawing.DrawingSpec(color=(255,0,0), thickness=2)
+                    _LANDMARK_DRAWING_SPEC,
+                    _CONNECTION_DRAWING_SPEC
                 )
         
         return raw_action, frame, res
@@ -1426,8 +1455,9 @@ class WaveControlGUI(Gtk.Window):
                         self.action_executed = True
                         self.last_action = action
                 
-                # Atualiza indicadores de status com feedback visual
-                def update_gesture_indicator(gesture, flash_active):
+                # OTIMIZAÇÃO: Agrupa todas as atualizações de UI em uma única função
+                # para reduzir overhead de GLib.idle_add
+                def update_all_ui(gesture, flash_active, fps_value):
                     # Mapeamento de emojis por gesto
                     emoji_map = {
                         "next": "👆",
@@ -1467,17 +1497,16 @@ class WaveControlGUI(Gtk.Window):
                                     label_ctx.remove_class("gesture-flash")
                                     return False
                                 GLib.timeout_add(400, remove_flash)
-                
-                GLib.idle_add(update_gesture_indicator, action, self.action_executed and action != "neutral")
+                    
+                    # Atualiza FPS
+                    self.fps_label.set_text(f"{fps_value:.1f}")
                 
                 # Atualiza FPS e métricas
                 stats = self.analytics.get_stats_summary()
                 fps_value = stats['performance']['fps']
-                total_gestures = stats['usage']['total_gestures']
-                total_frames = stats['performance']['total_frames']
                 
-                GLib.idle_add(self.fps_label.set_text, f"{fps_value:.1f}")
-                # Removido: atualização de labels de métricas
+                # OTIMIZAÇÃO: Apenas 1 GLib.idle_add ao invés de múltiplos
+                GLib.idle_add(update_all_ui, action, self.action_executed and action != "neutral", fps_value)
                 
                 # Converte frame para exibição na GUI
                 height, width, channels = frame.shape
