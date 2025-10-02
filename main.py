@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import cv2
 import time
-import uinput
+import os
+import sys
+import subprocess
 import mediapipe as mp
 import gi
 gi.require_version('Gtk', '3.0')
@@ -30,8 +32,96 @@ MAX_ZOOM = 4.0          # zoom máximo
 GESTURE_WINDOW_SIZE = 6  # número de frames para confirmar gesto (reduzido para resposta mais rápida)
 CONSISTENCY_THRESHOLD = 0.67  # 67% das amostras devem ser iguais (4 de 6 frames)
 
-# ===== Dispositivo virtual (uinput) =====
-kb = uinput.Device([uinput.KEY_RIGHT, uinput.KEY_LEFT, uinput.KEY_HOME, uinput.KEY_END])
+# ===== Detecção de ambiente =====
+def is_wayland():
+    """Detecta se está rodando no Wayland"""
+    return os.environ.get('WAYLAND_DISPLAY') is not None or \
+           os.environ.get('XDG_SESSION_TYPE') == 'wayland'
+
+# ===== Abstração para entrada de teclado =====
+class KeyboardEmulator:
+    """Abstração que funciona em X11 e Wayland"""
+    
+    def __init__(self):
+        self.is_wayland = is_wayland()
+        self.backend = None
+        
+        if self.is_wayland:
+            print("🌊 Wayland detectado - usando pynput")
+            self._init_wayland()
+        else:
+            print("🪟 X11 detectado - usando uinput")
+            self._init_x11()
+    
+    def _init_x11(self):
+        """Inicializa uinput para X11"""
+        try:
+            import uinput
+            self.backend = uinput.Device([
+                uinput.KEY_RIGHT, 
+                uinput.KEY_LEFT, 
+                uinput.KEY_HOME, 
+                uinput.KEY_END
+            ])
+            self.backend_type = 'uinput'
+        except Exception as e:
+            print(f"❌ Erro ao inicializar uinput: {e}")
+            print("💡 Execute: sudo modprobe uinput")
+            print("💡 Adicione seu usuário ao grupo input:")
+            print(f"   sudo usermod -aG input {os.getenv('USER')}")
+            sys.exit(1)
+    
+    def _init_wayland(self):
+        """Inicializa pynput para Wayland"""
+        try:
+            from pynput.keyboard import Controller, Key
+            self.backend = Controller()
+            self.Key = Key
+            self.backend_type = 'pynput'
+            print("✅ pynput inicializado com sucesso")
+        except ImportError:
+            print("❌ pynput não está instalado!")
+            print("")
+            print("Instale com:")
+            print("  pip install pynput")
+            print("")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ Erro ao inicializar pynput: {e}")
+            sys.exit(1)
+    
+    def emit_key(self, key_name):
+        """Emite um pressionar de tecla"""
+        if self.backend_type == 'uinput':
+            import uinput
+            key_map = {
+                'right': uinput.KEY_RIGHT,
+                'left': uinput.KEY_LEFT,
+                'home': uinput.KEY_HOME,
+                'end': uinput.KEY_END
+            }
+            self.backend.emit_click(key_map[key_name])
+            
+        elif self.backend_type == 'pynput':
+            # Mapeamento de teclas para pynput
+            key_map = {
+                'right': self.Key.right,
+                'left': self.Key.left,
+                'home': self.Key.home,
+                'end': self.Key.end
+            }
+            
+            try:
+                key = key_map[key_name]
+                self.backend.press(key)
+                self.backend.release(key)
+            except KeyError:
+                print(f"❌ Tecla '{key_name}' não mapeada!")
+            except Exception as e:
+                print(f"⚠️  Erro ao emitir tecla {key_name}: {e}")
+
+# Inicializar emulador de teclado
+kb = KeyboardEmulator()
 
 # ===== MediaPipe =====
 mp_hands = mp.solutions.hands
@@ -212,16 +302,16 @@ def classify_gesture(lm, handed_label):
     return _GESTURE_MAP.get(n, "neutral")
 
 def press_next():
-    kb.emit_click(uinput.KEY_RIGHT)
+    kb.emit_key('right')
 
 def press_prev():
-    kb.emit_click(uinput.KEY_LEFT)
+    kb.emit_key('left')
 
 def press_home():
-    kb.emit_click(uinput.KEY_HOME)
+    kb.emit_key('home')
 
 def press_end():
-    kb.emit_click(uinput.KEY_END)
+    kb.emit_key('end')
 
 def calculate_hand_size(landmarks):
     """
@@ -976,7 +1066,15 @@ class WaveControlGUI(Gtk.Window):
         footer_info.set_halign(Gtk.Align.START)
         footer_info.get_style_context().add_class("status-label")
         
+        # Label discreta mostrando o backend (X11 ou Wayland)
+        backend_name = "Wayland (pynput)" if is_wayland() else "X11 (uinput)"
+        backend_label = Gtk.Label(label=f"🖥️ {backend_name}")
+        backend_label.set_halign(Gtk.Align.END)
+        backend_label.get_style_context().add_class("status-label")
+        backend_label.set_opacity(0.7)  # Torna mais discreto
+        
         footer.pack_start(footer_info, True, True, 0)
+        footer.pack_end(backend_label, False, False, 0)
         main_container.pack_end(footer, False, False, 0)
         
     def on_zoom_changed(self, scale):

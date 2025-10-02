@@ -130,6 +130,12 @@ WaveControl.AppDir/usr/bin/pip3 install python-uinput>=0.11.2 || {
     exit 1
 }
 
+echo "Instalando pynput (suporte Wayland)..."
+WaveControl.AppDir/usr/bin/pip3 install pynput>=1.7.6 || {
+    echo "❌ Erro ao instalar pynput"
+    exit 1
+}
+
 echo "Instalando PyGObject${PYGOBJECT_VERSION}..."
 WaveControl.AppDir/usr/bin/pip3 install "PyGObject${PYGOBJECT_VERSION}" || {
     echo "❌ Erro ao instalar PyGObject"
