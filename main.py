@@ -1262,11 +1262,15 @@ class WaveControlGUI(Gtk.Window):
         global gesture_history
         gesture_history.clear()
         
+        log.section("Iniciando Detecção de Gestos")
+        log.info(f"Abrindo câmera (índice: {CAM_INDEX}, resolução: 800x800)...", "CAMERA")
+        
         self.cap = cv2.VideoCapture(CAM_INDEX)
         # Define resolução da captura
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)   # Largura
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 800)  # Altura
         if not self.cap.isOpened():
+            log.error("Falha ao acessar a câmera", "CAMERA")
             dialog = Gtk.MessageDialog(
                 transient_for=self,
                 flags=0,
@@ -1278,13 +1282,15 @@ class WaveControlGUI(Gtk.Window):
             dialog.run()
             dialog.destroy()
             return
-            
+        
+        log.success("Câmera aberta com sucesso", "CAMERA")    
         self.is_running = True
         self.start_ts = time.time()
         
         # Inicia sessão de analytics
         self.analytics.start_session()
         self.analytics.set_calibration_time(CALIBRATION_S)
+        log.info(f"Período de calibração: {CALIBRATION_S}s", "DETECÇÃO")
         
         self.header_start_button.set_label("⏹ Parar")
         
@@ -1298,6 +1304,7 @@ class WaveControlGUI(Gtk.Window):
         self.processing_thread.start()
         
     def stop_detection(self):
+        log.section("Parando Detecção de Gestos")
         self.is_running = False
         
         # Finaliza sessão de analytics
@@ -1305,11 +1312,13 @@ class WaveControlGUI(Gtk.Window):
         
         if self.cap:
             self.cap.release()
+            log.info("Câmera liberada", "CAMERA")
         self.header_start_button.set_label("▶ Iniciar")
         
         # Mostra estatísticas no terminal
         log.section("Estatísticas da Sessão")
         self.analytics.print_stats()
+        log.info("Detecção finalizada", "DETECÇÃO")
         
         # Mostra placeholder e esconde vídeo
         self.video_image.clear()
@@ -1502,6 +1511,14 @@ class WaveControlGUI(Gtk.Window):
                     elif action != "neutral" and not self.action_executed:
                         # Verifica cooldown: só executa se passou tempo suficiente desde última ação
                         if time_since_last_action >= ACTION_COOLDOWN_S:
+                            # Mapeamento de ações para log
+                            action_map = {
+                                "next": ("Próximo", "→"),
+                                "prev": ("Anterior", "←"),
+                                "home": ("Início", "⇤"),
+                                "end": ("Fim", "⇥")
+                            }
+                            
                             if action == "next":
                                 press_next()
                                 self.analytics.record_gesture("next")
@@ -1514,6 +1531,10 @@ class WaveControlGUI(Gtk.Window):
                             elif action == "end":
                                 press_end()
                                 self.analytics.record_gesture("end")
+                            
+                            if action in action_map:
+                                action_name, symbol = action_map[action]
+                                log.success(f"Comando executado: {action_name} {symbol} (confiança: {gesture_confidence:.0f}%)", "GESTO")
                             
                             self.action_executed = True
                             self.last_action = action
