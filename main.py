@@ -79,8 +79,8 @@ MIN_ZOOM = 1.0          # zoom mínimo
 MAX_ZOOM = 4.0          # zoom máximo
 
 # ===== Filtro Temporal =====
-GESTURE_WINDOW_SIZE = 6  # número de frames para confirmar gesto (reduzido para resposta mais rápida)
-CONSISTENCY_THRESHOLD = 0.67  # 67% das amostras devem ser iguais (4 de 6 frames)
+GESTURE_WINDOW_SIZE = 9  # número de frames para confirmar gesto (balanceado: precisão + responsividade)
+CONSISTENCY_THRESHOLD = 0.78  # 78% das amostras devem ser iguais (7 de 9 frames)
 
 # ===== Detecção de ambiente =====
 def is_wayland():
@@ -362,9 +362,9 @@ def get_stable_gesture():
     # Threshold adaptativo: gestos diferentes requerem consistência diferente
     threshold = CONSISTENCY_THRESHOLD
     if most_common_gesture == "neutral":
-        threshold = 0.4  # Mais fácil voltar para neutral
+        threshold = 0.5  # Mais fácil voltar para neutral (5 de 9 frames)
     elif most_common_gesture == "next":  # Gesto número 1
-        threshold = 0.5  # Bem mais sensível para gesto 1 (50% = 3 de 6 frames)
+        threshold = 0.67  # Mesma sensibilidade dos outros gestos (6 de 9 frames)
     
     if consistency_ratio >= threshold and most_common_gesture != "neutral":
         return most_common_gesture
