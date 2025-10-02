@@ -22,6 +22,7 @@ MIN_TRK = 0.6
 CALIBRATION_S = 2.0     # tempo inicial para estabilizar câmera
 DRAW = True             # mostrar janela com landmarks
 CAM_INDEX = 0           # índice da webcam
+TARGET_FPS = 30         # FPS alvo (limita uso de CPU)
 
 # ===== Configurações de Zoom =====
 DEFAULT_ZOOM = 1.0      # zoom padrão (sem zoom)
@@ -983,8 +984,8 @@ class WaveControlGUI(Gtk.Window):
         video_wrapper = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         video_wrapper.set_margin_top(8)
         video_wrapper.set_margin_bottom(8)
-        video_wrapper.set_margin_left(8)
-        video_wrapper.set_margin_right(8)
+        video_wrapper.set_margin_start(8)
+        video_wrapper.set_margin_end(8)
         
         # Container do vídeo responsivo
         video_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -1161,7 +1162,7 @@ class WaveControlGUI(Gtk.Window):
         # Removido: labels de métricas simplificadas
         
     def _process_frame_async(self, frame_data):
-        """Processa frame em thread separada"""
+        """Processa frame em thread separada - OTIMIZADO"""
         start_time = time.perf_counter()
         
         frame, zoom_level, show_landmarks = frame_data
@@ -1169,23 +1170,7 @@ class WaveControlGUI(Gtk.Window):
         # Frame pooling: reutiliza buffers pré-alocados
         frame = cv2.flip(frame, 1)
         
-        # Primeiro processa para detectar mão (antes do zoom)
-        temp_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        temp_res = hands.process(temp_rgb)
-        
-        # Pega landmarks se disponível
-        hand_landmarks = None
-        if temp_res.multi_hand_landmarks:
-            hand_landmarks = temp_res.multi_hand_landmarks[0].landmark
-        
-        # Aplica zoom inteligente (auto + manual)
-        frame, actual_zoom = apply_smart_zoom(
-            frame,
-            landmarks=hand_landmarks,
-            manual_zoom=zoom_level,
-            enable_auto=self.auto_zoom_enabled if hasattr(self, 'auto_zoom_enabled') else False
-        )
-        
+        # Converte para RGB e processa MediaPipe UMA ÚNICA VEZ
         # Reutiliza buffers quando possível
         if self._rgb_buffer is None or self._rgb_buffer.shape != frame.shape:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -1195,6 +1180,19 @@ class WaveControlGUI(Gtk.Window):
             rgb = self._rgb_buffer
         
         res = hands.process(rgb)
+        
+        # Pega landmarks se disponível
+        hand_landmarks = None
+        if res.multi_hand_landmarks:
+            hand_landmarks = res.multi_hand_landmarks[0].landmark
+        
+        # Aplica zoom no frame BGR (após detecção)
+        frame, actual_zoom = apply_smart_zoom(
+            frame,
+            landmarks=hand_landmarks,
+            manual_zoom=zoom_level,
+            enable_auto=self.auto_zoom_enabled if hasattr(self, 'auto_zoom_enabled') else False
+        )
         
         # Métrica de tempo de processamento
         processing_time = (time.perf_counter() - start_time) * 1000
@@ -1209,7 +1207,7 @@ class WaveControlGUI(Gtk.Window):
                 handed = res.multi_handedness[0].classification[0].label
             raw_action = classify_gesture(lm.landmark, handed)
             
-            # Desenha landmarks se habilitado
+            # Desenha landmarks se habilitado (no frame com zoom aplicado)
             if show_landmarks:
                 mp_drawing.draw_landmarks(
                     frame, lm, mp_hands.HAND_CONNECTIONS,
@@ -1246,8 +1244,19 @@ class WaveControlGUI(Gtk.Window):
         processor_thread = threading.Thread(target=self._gesture_processor_thread, daemon=True)
         processor_thread.start()
         
+        # Controle de FPS
+        frame_time = 1.0 / TARGET_FPS
+        last_frame_time = time.time()
+        
         try:
             while self.is_running and self.cap and self.cap.isOpened():
+                # Limita FPS para economizar CPU
+                current_time = time.time()
+                elapsed = current_time - last_frame_time
+                if elapsed < frame_time:
+                    time.sleep(frame_time - elapsed)
+                last_frame_time = time.time()
+                
                 ok, frame = self.cap.read()
                 if not ok:
                     break
