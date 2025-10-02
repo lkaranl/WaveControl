@@ -1067,7 +1067,7 @@ class WaveControlGUI(Gtk.Window):
         footer_info.get_style_context().add_class("status-label")
         
         # Atalhos de teclado
-        shortcuts_label = Gtk.Label(label="⌨️ Espaço: Iniciar/Parar • Z: Zoom • Esc: Sair")
+        shortcuts_label = Gtk.Label(label="⌨️ Espaço: Iniciar/Parar • Z/+: Zoom In • X/-: Zoom Out • Esc: Sair")
         shortcuts_label.set_halign(Gtk.Align.CENTER)
         shortcuts_label.get_style_context().add_class("status-label")
         shortcuts_label.set_opacity(0.6)
@@ -1098,7 +1098,8 @@ class WaveControlGUI(Gtk.Window):
         Captura eventos de teclado - Atalhos:
         - Espaço: Iniciar/Parar detecção
         - Esc: Sair do modo teatro ou fechar app
-        - Z: Ciclar zoom (1x → 2x → 3x → 4x → 1x)
+        - Z ou +: Zoom in (aumentar)
+        - X ou -: Zoom out (diminuir)
         """
         # Esc: Sair do modo teatro ou fechar app
         if event.keyval == Gdk.KEY_Escape:
@@ -1116,20 +1117,34 @@ class WaveControlGUI(Gtk.Window):
             self.on_start_clicked(None)
             return True
         
-        # Z: Ciclar zoom (1x → 2x → 3x → 4x → 1x)
-        elif event.keyval == Gdk.KEY_z or event.keyval == Gdk.KEY_Z:
+        # Z ou +: Zoom in (aumentar)
+        elif event.keyval in (Gdk.KEY_z, Gdk.KEY_Z, Gdk.KEY_plus, Gdk.KEY_equal):
             current_zoom = self.zoom_level
             zoom_levels = [1.0, 2.0, 3.0, 4.0]
             
-            # Encontra próximo nível de zoom
-            try:
-                current_index = zoom_levels.index(current_zoom)
-                next_index = (current_index + 1) % len(zoom_levels)
-            except ValueError:
-                next_index = 0
+            # Encontra próximo nível de zoom (para cima)
+            for zoom in zoom_levels:
+                if zoom > current_zoom:
+                    self.set_zoom(zoom)
+                    return True
             
-            next_zoom = zoom_levels[next_index]
-            self.set_zoom(next_zoom)
+            # Se já está no máximo, mantém
+            self.set_zoom(MAX_ZOOM)
+            return True
+        
+        # X ou -: Zoom out (diminuir)
+        elif event.keyval in (Gdk.KEY_x, Gdk.KEY_X, Gdk.KEY_minus, Gdk.KEY_underscore):
+            current_zoom = self.zoom_level
+            zoom_levels = [1.0, 2.0, 3.0, 4.0]
+            
+            # Encontra próximo nível de zoom (para baixo)
+            for zoom in reversed(zoom_levels):
+                if zoom < current_zoom:
+                    self.set_zoom(zoom)
+                    return True
+            
+            # Se já está no mínimo, mantém
+            self.set_zoom(MIN_ZOOM)
             return True
         
         return False
