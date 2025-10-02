@@ -3,11 +3,22 @@ set -e
 
 echo "=== Construindo WaveControl AppImage ==="
 
-# Verificar se estamos no diretório correto
+# Verificar se estamos no diretório correto (deve ter main.py na raiz)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Mudar para o diretório raiz do projeto
+cd "$ROOT_DIR"
+
 if [ ! -f "main.py" ]; then
-    echo "Erro: Execute este script no diretório raiz do WaveControl"
+    echo "Erro: main.py não encontrado no diretório raiz: $ROOT_DIR"
     exit 1
 fi
+
+echo "📁 Diretório raiz: $ROOT_DIR"
+
+# Mudar para o diretório de scripts
+cd "$SCRIPT_DIR"
 
 # Criar estrutura do AppDir se não existir
 mkdir -p WaveControl.AppDir/usr/bin
@@ -25,15 +36,19 @@ fi
 # Nota: Este AppImage assume que as dependências já estão instaladas no sistema
 echo "Criando AppImage (dependências do sistema serão usadas)..."
 
-# Copiar arquivos se necessário
-if [ ! -f "WaveControl.AppDir/usr/bin/main.py" ]; then
-    cp main.py WaveControl.AppDir/usr/bin/
+# Copiar arquivos sempre (força atualização)
+echo "📋 Copiando arquivos Python..."
+cp "$ROOT_DIR/main.py" WaveControl.AppDir/usr/bin/
+echo "   ✓ main.py copiado"
+
+# Copiar analytics.py se existir
+if [ -f "$ROOT_DIR/analytics.py" ]; then
+    cp "$ROOT_DIR/analytics.py" WaveControl.AppDir/usr/bin/
+    echo "   ✓ analytics.py copiado"
 fi
 
-if [ ! -f "WaveControl.AppDir/usr/bin/WaveControl" ]; then
-    cp WaveControl.AppDir/usr/bin/WaveControl WaveControl.AppDir/usr/bin/
-    chmod +x WaveControl.AppDir/usr/bin/WaveControl
-fi
+# Verificar se o script WaveControl já existe no AppDir
+# (Caso contrário, será criado depois ou já deve existir na estrutura)
 
 # Criar symlink para AppRun
 if [ ! -L "WaveControl.AppDir/AppRun" ]; then

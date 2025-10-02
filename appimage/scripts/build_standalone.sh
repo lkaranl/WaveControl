@@ -153,6 +153,13 @@ if [ ! -f "WaveControl.AppDir/usr/bin/main.py" ]; then
     exit 1
 fi
 
+# Copiar analytics.py se existir
+if [ -f "../../analytics.py" ]; then
+    echo "📋 Copiando analytics.py..."
+    cp ../../analytics.py WaveControl.AppDir/usr/bin/
+    echo "✅ analytics.py copiado"
+fi
+
 # Criar AppRun totalmente autônomo
 cat > WaveControl.AppDir/AppRun << 'EOF'
 #!/bin/bash
