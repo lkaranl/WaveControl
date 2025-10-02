@@ -513,7 +513,22 @@ class WaveControlGUI(Gtk.Window):
             font-size: 20px;
             font-weight: 600;
             color: @theme_fg_color;
-            margin-right: 24px;
+        }
+        
+        .header-separator {
+            font-size: 20px;
+            color: alpha(@theme_fg_color, 0.3);
+        }
+        
+        .header-gesture {
+            font-size: 18px;
+            font-weight: 700;
+            color: @theme_selected_bg_color;
+            padding: 6px 16px;
+            background: alpha(@theme_selected_bg_color, 0.1);
+            border-radius: 8px;
+            border: 2px solid alpha(@theme_selected_bg_color, 0.3);
+            transition: all 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
         }
         
         /* Sidebar elegante */
@@ -617,6 +632,15 @@ class WaveControlGUI(Gtk.Window):
             transition: all 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
         }
         
+        .status-indicator-subtle {
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: 500;
+            background: alpha(@theme_fg_color, 0.08);
+            color: alpha(@theme_fg_color, 0.7);
+        }
+        
         /* Indicadores de gestos específicos com cores */
         .gesture-next {
             background: #4CAF50;
@@ -712,8 +736,19 @@ class WaveControlGUI(Gtk.Window):
         
         .gesture-compact {
             font-size: 14px;
-            padding: 4px 0;
+            padding: 8px 12px;
+            margin: 2px 0;
+            border-radius: 6px;
             color: alpha(@theme_fg_color, 0.9);
+            transition: all 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
+            background: transparent;
+        }
+        
+        /* Gesto ativo - pulsação suave */
+        .gesture-active {
+            background: alpha(@theme_selected_bg_color, 0.15);
+            font-weight: 600;
+            box-shadow: 0 0 0 2px alpha(@theme_selected_bg_color, 0.3);
         }
         
         /* Rodapé minimalista */
@@ -759,21 +794,27 @@ class WaveControlGUI(Gtk.Window):
         header_toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         header_toolbar.get_style_context().add_class("header-toolbar")
         
-        # Seção esquerda do header - título e informações
-        header_left = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        # Seção esquerda do header - título e gesto atual
+        header_left = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
         
         # Título da aplicação
         title_label = Gtk.Label(label="WaveControl")
         title_label.get_style_context().add_class("app-title")
         title_label.set_halign(Gtk.Align.START)
         
-        # Status principal no header (versão compacta)
-        self.header_status = Gtk.Label(label="Parado")
-        self.header_status.get_style_context().add_class("status-indicator")
-        self.header_status.set_size_request(117, -1)  # Largura mínima para "Ativo"
+        # Separador visual
+        separator = Gtk.Label(label="|")
+        separator.get_style_context().add_class("header-separator")
+        separator.set_opacity(0.3)
+        
+        # Gesto atual no header (grande e visual)
+        self.header_gesture = Gtk.Label(label="✊ neutral")
+        self.header_gesture.get_style_context().add_class("header-gesture")
+        self.header_gesture.set_halign(Gtk.Align.START)
         
         header_left.pack_start(title_label, False, False, 0)
-        header_left.pack_start(self.header_status, False, False, 0)
+        header_left.pack_start(separator, False, False, 0)
+        header_left.pack_start(self.header_gesture, False, False, 0)
         
         # Seção direita do header - controles
         header_right = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -844,16 +885,11 @@ class WaveControlGUI(Gtk.Window):
         status_title.get_style_context().add_class("card-title")
         status_title.set_halign(Gtk.Align.START)
         
-        # Grid de status
+        # Grid de status enxuto
         status_grid = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         status_grid.get_style_context().add_class("status-grid")
         
-        # Status principal
-        self.status_label = Gtk.Label(label="Sistema parado")
-        self.status_label.set_halign(Gtk.Align.START)
-        self.status_label.get_style_context().add_class("status-label")
-        
-        # Status da ação atual
+        # Gesto Atual (grande e destacado)
         action_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         action_item.get_style_context().add_class("status-item")
         
@@ -868,34 +904,6 @@ class WaveControlGUI(Gtk.Window):
         action_item.pack_start(action_label, False, False, 0)
         action_item.pack_end(self.action_indicator, False, False, 0)
         
-        # Filtro temporal
-        filter_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        filter_item.get_style_context().add_class("status-item")
-        
-        filter_label = Gtk.Label(label="Filtro:")
-        filter_label.get_style_context().add_class("status-label")
-        
-        self.filter_label = Gtk.Label(label="0/8")
-        self.filter_label.get_style_context().add_class("status-indicator")
-        self.filter_label.set_tooltip_text("Filtro temporal de gestos (frames consistentes/total)")
-        
-        filter_item.pack_start(filter_label, False, False, 0)
-        filter_item.pack_end(self.filter_label, False, False, 0)
-        
-        # Confiança do gesto
-        confidence_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        confidence_item.get_style_context().add_class("status-item")
-        
-        confidence_label = Gtk.Label(label="Confiança:")
-        confidence_label.get_style_context().add_class("status-label")
-        
-        self.confidence_label = Gtk.Label(label="0%")
-        self.confidence_label.get_style_context().add_class("status-indicator")
-        self.confidence_label.set_tooltip_text("Confiança do gesto detectado (maior = mais preciso)")
-        
-        confidence_item.pack_start(confidence_label, False, False, 0)
-        confidence_item.pack_end(self.confidence_label, False, False, 0)
-        
         # FPS
         fps_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         fps_item.get_style_context().add_class("status-item")
@@ -904,8 +912,8 @@ class WaveControlGUI(Gtk.Window):
         fps_label.get_style_context().add_class("status-label")
         
         self.fps_label = Gtk.Label(label="0.0")
-        self.fps_label.get_style_context().add_class("status-indicator")
-        self.fps_label.set_tooltip_text("Taxa de quadros por segundo (FPS) - performance do sistema")
+        self.fps_label.get_style_context().add_class("status-indicator-subtle")
+        self.fps_label.set_tooltip_text("Taxa de quadros por segundo")
         
         fps_item.pack_start(fps_label, False, False, 0)
         fps_item.pack_end(self.fps_label, False, False, 0)
@@ -942,10 +950,7 @@ class WaveControlGUI(Gtk.Window):
         zoom_inline_item.pack_start(self.zoom_scale, True, True, 0)
         zoom_inline_item.pack_end(self.zoom_value_label, False, False, 0)
         
-        status_grid.pack_start(self.status_label, False, False, 0)
         status_grid.pack_start(action_item, False, False, 0)
-        status_grid.pack_start(filter_item, False, False, 0)
-        status_grid.pack_start(confidence_item, False, False, 0)
         status_grid.pack_start(fps_item, False, False, 0)
         status_grid.pack_start(zoom_inline_item, False, False, 0)
         
@@ -1105,8 +1110,6 @@ class WaveControlGUI(Gtk.Window):
         self.analytics.set_calibration_time(CALIBRATION_S)
         
         self.header_start_button.set_label("⏹ Parar")
-        self.header_status.set_text("Calibrando...")
-        self.status_label.set_text("Sistema calibrando...")
         
         # Esconde placeholder e mostra vídeo
         self.placeholder_label.get_parent().hide()
@@ -1126,8 +1129,6 @@ class WaveControlGUI(Gtk.Window):
         if self.cap:
             self.cap.release()
         self.header_start_button.set_label("▶ Iniciar")
-        self.header_status.set_text("Parado")
-        self.status_label.set_text("Sistema parado")
         
         # Mostra estatísticas no terminal
         print("\n" + "="*50)
@@ -1141,8 +1142,7 @@ class WaveControlGUI(Gtk.Window):
         
         # Reset dos indicadores
         self.action_indicator.set_text("neutral")
-        self.filter_label.set_text("0/8")
-        self.confidence_label.set_text("0%")
+        self.header_gesture.set_text("✊ neutral")
         self.fps_label.set_text("0.0")
         
         # Reset métricas
@@ -1283,56 +1283,70 @@ class WaveControlGUI(Gtk.Window):
                 # Calibração inicial
                 if now - self.start_ts < CALIBRATION_S:
                     cv2.putText(frame, "Calibrando...", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
-                    GLib.idle_add(self.header_status.set_text, "Calibrando...")
-                    GLib.idle_add(self.status_label.set_text, "Sistema calibrando...")
                 else:
                     # Lógica de execução de ações
                     if action == "neutral":
                         if self.action_executed:
                             self.action_executed = False
-                            GLib.idle_add(self.header_status.set_text, "Ativo")
-                            GLib.idle_add(self.status_label.set_text, "Sistema ativo - Pronto")
                     elif action != "neutral" and not self.action_executed:
                         if action == "next":
                             press_next()
                             self.analytics.record_gesture("next")
-                            GLib.idle_add(self.header_status.set_text, "Próximo →")
-                            GLib.idle_add(self.status_label.set_text, "Próximo slide executado")
                         elif action == "prev":
                             press_prev()
                             self.analytics.record_gesture("prev")
-                            GLib.idle_add(self.header_status.set_text, "← Anterior")
-                            GLib.idle_add(self.status_label.set_text, "Slide anterior executado")
                         elif action == "home":
                             press_home()
                             self.analytics.record_gesture("home")
-                            GLib.idle_add(self.header_status.set_text, "⏮ Início")
-                            GLib.idle_add(self.status_label.set_text, "Indo para o início")
                         elif action == "end":
                             press_end()
                             self.analytics.record_gesture("end")
-                            GLib.idle_add(self.header_status.set_text, "⏭ Fim")
-                            GLib.idle_add(self.status_label.set_text, "Indo para o fim")
                         self.action_executed = True
                         self.last_action = action
-                    elif action != "neutral" and self.action_executed:
-                        GLib.idle_add(self.header_status.set_text, "Aguardando...")
-                        GLib.idle_add(self.status_label.set_text, "Aguardando posição neutra")
                 
                 # Atualiza indicadores de status com feedback visual
-                def update_gesture_indicator(gesture):
-                    # Remove classes antigas
+                def update_gesture_indicator(gesture, flash_active):
+                    # Mapeamento de emojis por gesto
+                    emoji_map = {
+                        "next": "👆",
+                        "prev": "✌️",
+                        "home": "🤟",
+                        "end": "🖖",
+                        "neutral": "✊"
+                    }
+                    
+                    # Atualiza header com emoji
+                    emoji = emoji_map.get(gesture, "✊")
+                    self.header_gesture.set_text(f"{emoji} {gesture}")
+                    
+                    # Atualiza indicador de status (badge colorido)
                     ctx = self.action_indicator.get_style_context()
                     for cls in ["gesture-next", "gesture-prev", "gesture-home", "gesture-end", "gesture-neutral"]:
                         ctx.remove_class(cls)
-                    
-                    # Adiciona classe específica do gesto
                     ctx.add_class(f"gesture-{gesture}")
                     self.action_indicator.set_text(gesture)
+                    
+                    # Atualiza visual dos cards de gestos
+                    for gesture_id, label in self.gesture_labels.items():
+                        label_ctx = label.get_style_context()
+                        label_ctx.remove_class("gesture-active")
+                        label_ctx.remove_class("gesture-flash")
+                        
+                        # Marca o gesto ativo
+                        if gesture_id == gesture:
+                            label_ctx.add_class("gesture-active")
+                            
+                            # Flash quando executa ação
+                            if flash_active and gesture != "neutral":
+                                label_ctx.add_class("gesture-flash")
+                                
+                                # Remove flash após 400ms
+                                def remove_flash():
+                                    label_ctx.remove_class("gesture-flash")
+                                    return False
+                                GLib.timeout_add(400, remove_flash)
                 
-                GLib.idle_add(update_gesture_indicator, action)
-                GLib.idle_add(self.filter_label.set_text, f"{len(gesture_history)}/{GESTURE_WINDOW_SIZE}")
-                GLib.idle_add(self.confidence_label.set_text, f"{gesture_confidence:.0f}%")
+                GLib.idle_add(update_gesture_indicator, action, self.action_executed and action != "neutral")
                 
                 # Atualiza FPS e métricas
                 stats = self.analytics.get_stats_summary()
