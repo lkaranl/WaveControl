@@ -27,8 +27,8 @@ MIN_ZOOM = 1.0          # zoom mínimo
 MAX_ZOOM = 4.0          # zoom máximo
 
 # ===== Filtro Temporal =====
-GESTURE_WINDOW_SIZE = 8  # número de frames para confirmar gesto
-CONSISTENCY_THRESHOLD = 0.75  # 75% das amostras devem ser iguais
+GESTURE_WINDOW_SIZE = 6  # número de frames para confirmar gesto (reduzido para resposta mais rápida)
+CONSISTENCY_THRESHOLD = 0.67  # 67% das amostras devem ser iguais (4 de 6 frames)
 
 # ===== Dispositivo virtual (uinput) =====
 kb = uinput.Device([uinput.KEY_RIGHT, uinput.KEY_LEFT, uinput.KEY_HOME, uinput.KEY_END])
@@ -56,7 +56,8 @@ PIP = { "thumb": 3, "index": 6, "middle": 10, "ring": 14, "pinky": 18 }
 
 # Cache para thresholds adaptativos
 _THUMB_THRESHOLD = 0.05
-_FINGER_THRESHOLD = 0.05
+_FINGER_THRESHOLD = 0.06  # Threshold para dedos normais (mais restritivo)
+_INDEX_THRESHOLD = 0.03   # Threshold bem mais sensível para dedo indicador
 
 # MCP indices (base dos dedos) para melhor detecção
 MCP = { "index": 5, "middle": 9, "ring": 13, "pinky": 17 }
@@ -89,6 +90,9 @@ def finger_extended(lm, tip_idx, pip_idx, handed_label):
                 finger_name = name
                 break
         
+        # Threshold específico para cada dedo
+        threshold = _INDEX_THRESHOLD if finger_name == "index" else _FINGER_THRESHOLD
+        
         if finger_name and finger_name in MCP:
             mcp = lm[MCP[finger_name]]
             
@@ -96,13 +100,16 @@ def finger_extended(lm, tip_idx, pip_idx, handed_label):
             # 1. TIP está acima do PIP
             # 2. TIP está acima ou próximo do MCP
             # 3. A diferença é significativa
-            tip_above_pip = tip.y < pip.y - _FINGER_THRESHOLD
-            tip_above_mcp = tip.y < mcp.y + 0.02  # Mais tolerante com MCP
+            tip_above_pip = tip.y < pip.y - threshold
+            
+            # Para indicador, mais tolerância no MCP
+            mcp_tolerance = 0.05 if finger_name == "index" else 0.03
+            tip_above_mcp = tip.y < mcp.y + mcp_tolerance
             
             return tip_above_pip and tip_above_mcp
         
         # Fallback para método antigo
-        return tip.y < pip.y - _FINGER_THRESHOLD
+        return tip.y < pip.y - threshold
 
 # Cache para ordem de dedos
 _FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
@@ -113,6 +120,14 @@ def count_extended(lm, handed_label):
         if finger_extended(lm, TIP[name], PIP[name], handed_label):
             cnt += 1
     return cnt
+
+def get_extended_fingers(lm, handed_label):
+    """Retorna lista de dedos estendidos para análise detalhada"""
+    extended = []
+    for name in _FINGER_NAMES:
+        if finger_extended(lm, TIP[name], PIP[name], handed_label):
+            extended.append(name)
+    return extended
 
 # ===== Histórico de Gestos =====
 gesture_history = []
@@ -126,10 +141,10 @@ def add_gesture_to_history(gesture):
 def get_stable_gesture():
     """
     Retorna gesto estável baseado no histórico - otimizado com Counter
-    Agora com confiança adaptativa
+    Agora com confiança adaptativa e mais sensível
     """
-    if len(gesture_history) < GESTURE_WINDOW_SIZE:
-        return "neutral"  # aguarda janela completa
+    if len(gesture_history) < 4:  # Reduzido para responder mais rápido
+        return "neutral"
     
     # Usa Counter para contar eficientemente
     gesture_counts = Counter(gesture_history)
@@ -138,13 +153,14 @@ def get_stable_gesture():
     most_common_gesture, most_common_count = gesture_counts.most_common(1)[0]
     
     # Verifica se atende o threshold de consistência
-    consistency_ratio = most_common_count / GESTURE_WINDOW_SIZE
+    consistency_ratio = most_common_count / len(gesture_history)
     
-    # Threshold adaptativo: se é neutral, requer menos consistência
-    # Se é um gesto de ação, requer mais consistência
+    # Threshold adaptativo: gestos diferentes requerem consistência diferente
     threshold = CONSISTENCY_THRESHOLD
     if most_common_gesture == "neutral":
-        threshold = 0.5  # Mais fácil voltar para neutral
+        threshold = 0.4  # Mais fácil voltar para neutral
+    elif most_common_gesture == "next":  # Gesto número 1
+        threshold = 0.5  # Bem mais sensível para gesto 1 (50% = 3 de 6 frames)
     
     if consistency_ratio >= threshold and most_common_gesture != "neutral":
         return most_common_gesture
@@ -173,7 +189,26 @@ _GESTURE_MAP = {
 }
 
 def classify_gesture(lm, handed_label):
-    n = count_extended(lm, handed_label)
+    """
+    Classifica gesto com lógica melhorada para número 1
+    Prioriza indicador levantado sozinho com verificação dupla
+    """
+    extended_fingers = get_extended_fingers(lm, handed_label)
+    
+    # Detecção especial para gesto número 1
+    # Verifica: indicador levantado E outros dedos (middle, ring, pinky) fechados
+    index_extended = "index" in extended_fingers
+    middle_closed = "middle" not in extended_fingers
+    ring_closed = "ring" not in extended_fingers
+    pinky_closed = "pinky" not in extended_fingers
+    
+    # Se indicador levantado e os 3 últimos dedos fechados = gesto número 1
+    # (ignora polegar completamente)
+    if index_extended and middle_closed and ring_closed and pinky_closed:
+        return "next"  # Gesto número 1
+    
+    # Para outros gestos, conta todos os dedos
+    n = len(extended_fingers)
     return _GESTURE_MAP.get(n, "neutral")
 
 def press_next():
@@ -309,7 +344,7 @@ class WaveControlGUI(Gtk.Window):
         self.last_action = "neutral"
         self.action_executed = False
         self.zoom_level = DEFAULT_ZOOM
-        self.auto_zoom_enabled = True  # Auto-zoom inteligente
+        self.auto_zoom_enabled = False  # Auto-zoom desabilitado por padrão para melhor reconhecimento
         self.current_auto_zoom = 1.0
         
         # Frame pooling para reduzir alocações
