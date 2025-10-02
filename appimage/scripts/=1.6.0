@@ -1,0 +1,4 @@
+Collecting evdev
+  Using cached evdev-1.9.2-cp311-cp311-linux_x86_64.whl
+Installing collected packages: evdev
+Successfully installed evdev-1.9.2

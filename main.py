@@ -47,7 +47,7 @@ class KeyboardEmulator:
         self.backend = None
         
         if self.is_wayland:
-            print("🌊 Wayland detectado - usando pynput")
+            print("🌊 Wayland detectado - usando evdev")
             self._init_wayland()
         else:
             print("🪟 X11 detectado - usando uinput")
@@ -72,22 +72,45 @@ class KeyboardEmulator:
             sys.exit(1)
     
     def _init_wayland(self):
-        """Inicializa pynput para Wayland"""
+        """Inicializa evdev para Wayland"""
         try:
-            from pynput.keyboard import Controller, Key
-            self.backend = Controller()
-            self.Key = Key
-            self.backend_type = 'pynput'
-            print("✅ pynput inicializado com sucesso")
+            import evdev
+            from evdev import UInput, ecodes as e
+            
+            # Criar dispositivo virtual com as teclas necessárias
+            capabilities = {
+                e.EV_KEY: [
+                    e.KEY_RIGHT,
+                    e.KEY_LEFT,
+                    e.KEY_HOME,
+                    e.KEY_END
+                ]
+            }
+            
+            self.backend = UInput(capabilities, name='WaveControl-Virtual-Keyboard')
+            self.ecodes = e
+            self.backend_type = 'evdev'
+            print("✅ evdev inicializado com sucesso (Wayland)")
+            
         except ImportError:
-            print("❌ pynput não está instalado!")
+            print("❌ evdev não está instalado!")
             print("")
             print("Instale com:")
-            print("  pip install pynput")
+            print("  pip install evdev")
+            print("")
+            sys.exit(1)
+        except PermissionError:
+            print("❌ Sem permissão para criar dispositivo virtual!")
+            print("")
+            print("Execute com sudo ou configure uinput:")
+            print("  sudo modprobe uinput")
+            print("  sudo usermod -aG input $USER")
             print("")
             sys.exit(1)
         except Exception as e:
-            print(f"❌ Erro ao inicializar pynput: {e}")
+            print(f"❌ Erro ao inicializar evdev: {e}")
+            import traceback
+            traceback.print_exc()
             sys.exit(1)
     
     def emit_key(self, key_name):
@@ -102,23 +125,29 @@ class KeyboardEmulator:
             }
             self.backend.emit_click(key_map[key_name])
             
-        elif self.backend_type == 'pynput':
-            # Mapeamento de teclas para pynput
+        elif self.backend_type == 'evdev':
+            # Mapeamento de teclas para evdev
             key_map = {
-                'right': self.Key.right,
-                'left': self.Key.left,
-                'home': self.Key.home,
-                'end': self.Key.end
+                'right': self.ecodes.KEY_RIGHT,
+                'left': self.ecodes.KEY_LEFT,
+                'home': self.ecodes.KEY_HOME,
+                'end': self.ecodes.KEY_END
             }
             
             try:
                 key = key_map[key_name]
-                self.backend.press(key)
-                self.backend.release(key)
+                # Pressionar tecla
+                self.backend.write(self.ecodes.EV_KEY, key, 1)
+                self.backend.syn()
+                # Soltar tecla
+                self.backend.write(self.ecodes.EV_KEY, key, 0)
+                self.backend.syn()
             except KeyError:
                 print(f"❌ Tecla '{key_name}' não mapeada!")
             except Exception as e:
                 print(f"⚠️  Erro ao emitir tecla {key_name}: {e}")
+                import traceback
+                traceback.print_exc()
 
 # Inicializar emulador de teclado
 kb = KeyboardEmulator()
@@ -1067,7 +1096,7 @@ class WaveControlGUI(Gtk.Window):
         footer_info.get_style_context().add_class("status-label")
         
         # Label discreta mostrando o backend (X11 ou Wayland)
-        backend_name = "Wayland (pynput)" if is_wayland() else "X11 (uinput)"
+        backend_name = "Wayland (evdev)" if is_wayland() else "X11 (uinput)"
         backend_label = Gtk.Label(label=f"🖥️ {backend_name}")
         backend_label.set_halign(Gtk.Align.END)
         backend_label.get_style_context().add_class("status-label")

@@ -3,15 +3,14 @@
 opencv-python>=4.8.0
 mediapipe==0.10.14; python_version < "3.12"
 python-uinput>=0.11.2  # Para X11
-pynput>=1.7.6  # Para Wayland
+evdev>=1.6.0  # Para Wayland
 PyGObject>=3.42.0
 
 # Dependências do Sistema:
 # 
-# Para X11:
+# Para X11 e Wayland:
 #   - uinput kernel module: sudo modprobe uinput
 #   - Adicionar usuário ao grupo input: sudo usermod -aG input $USER
 #
-# Para Wayland:
-#   - Nenhuma dependência adicional (usa pynput)
+# Ambos os backends (uinput e evdev) requerem as mesmas permissões
 

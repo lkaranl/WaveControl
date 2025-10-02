@@ -130,9 +130,9 @@ WaveControl.AppDir/usr/bin/pip3 install python-uinput>=0.11.2 || {
     exit 1
 }
 
-echo "Instalando pynput (suporte Wayland)..."
-WaveControl.AppDir/usr/bin/pip3 install pynput>=1.7.6 || {
-    echo "❌ Erro ao instalar pynput"
+echo "Instalando evdev (suporte Wayland)..."
+WaveControl.AppDir/usr/bin/pip3 install evdev>=1.6.0 || {
+    echo "❌ Erro ao instalar evdev"
     exit 1
 }
 
