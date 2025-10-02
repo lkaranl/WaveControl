@@ -484,6 +484,7 @@ class WaveControlGUI(Gtk.Window):
         
         # Conecta eventos
         self.connect("destroy", self.on_window_destroy)
+        self.connect("key-press-event", self.on_key_press)
         
         # Inicia automaticamente
         GLib.idle_add(self.start_detection)
@@ -532,14 +533,14 @@ class WaveControlGUI(Gtk.Window):
         
         /* Container de vídeo aprimorado */
         .video-area {
-            border-radius: 12px;
+            border-radius: 20px;
             background: @theme_base_color;
-            box-shadow: 0 2px 8px alpha(black, 0.1);
+            box-shadow: 0 8px 24px alpha(black, 0.15);
         }
         
         .video-container {
             background: black;
-            border-radius: 12px;
+            border-radius: 20px;
             min-height: 400px;
         }
         
@@ -1056,6 +1057,13 @@ class WaveControlGUI(Gtk.Window):
         video_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         video_container.get_style_context().add_class("video-container")
         
+        # EventBox para capturar cliques e ativar modo teatro
+        self.video_event_box = Gtk.EventBox()
+        self.video_event_box.connect("button-press-event", self.on_video_clicked)
+        
+        # Variável para controlar modo teatro
+        self.theater_mode = False
+        
         self.video_image = Gtk.Image()
         self.video_image.set_halign(Gtk.Align.CENTER)
         self.video_image.set_valign(Gtk.Align.CENTER)
@@ -1081,7 +1089,10 @@ class WaveControlGUI(Gtk.Window):
         video_container.pack_start(self.video_image, True, True, 0)
         video_container.pack_start(placeholder_box, True, True, 0)
         
-        video_wrapper.pack_start(video_container, True, True, 0)
+        # Envolver video_container no EventBox para capturar cliques
+        self.video_event_box.add(video_container)
+        
+        video_wrapper.pack_start(self.video_event_box, True, True, 0)
         video_area.pack_start(video_wrapper, True, True, 0)
         main_content.pack_start(video_area, True, True, 0)
         
@@ -1114,6 +1125,31 @@ class WaveControlGUI(Gtk.Window):
         self.zoom_level = zoom_value
         self.zoom_scale.set_value(zoom_value)
         self.zoom_value_label.set_text(f"{zoom_value:.1f}x")
+    
+    def on_key_press(self, widget, event):
+        """Captura eventos de teclado (Esc para sair do modo teatro)"""
+        if event.keyval == Gdk.KEY_Escape and self.theater_mode:
+            self.theater_mode = False
+            self.unfullscreen()
+            return True
+        return False
+    
+    def on_video_clicked(self, widget, event):
+        """
+        Toggle modo teatro (fullscreen) ao clicar duplo no vídeo
+        Clique duplo = fullscreen, Esc para sair
+        """
+        if not self.is_running:
+            return
+        
+        # Detectar clique duplo (type == 5 é GDK_2BUTTON_PRESS)
+        if event.type == Gdk.EventType._2BUTTON_PRESS:
+            self.theater_mode = not self.theater_mode
+            
+            if self.theater_mode:
+                self.fullscreen()
+            else:
+                self.unfullscreen()
     
     def on_auto_zoom_toggled(self, checkbox):
         self.auto_zoom_enabled = checkbox.get_active()
