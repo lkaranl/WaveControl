@@ -660,23 +660,46 @@ class WaveControlGUI(Gtk.Window):
             color: alpha(@theme_fg_color, 0.8);
         }
         
-        /* Controles de zoom harmonioso */
-        .zoom-inline {
-            background: alpha(@theme_bg_color, 0.3);
-            border-radius: 8px;
-            padding: 12px;
-            border: 1px solid alpha(@borders, 0.15);
+        /* Zoom minimalista inline */
+        .zoom-inline-minimal {
+            padding: 6px 0;
+            border-top: 1px solid alpha(@borders, 0.15);
         }
         
-        .zoom-value {
-            font-size: 14px;
+        .zoom-value-minimal {
+            font-size: 13px;
             font-weight: 600;
-            margin-bottom: 8px;
             color: @theme_selected_bg_color;
+            min-width: 36px;
         }
         
-        .zoom-buttons-row {
-            margin-top: 8px;
+        .zoom-slider-minimal scale {
+            min-height: 20px;
+        }
+        
+        .zoom-slider-minimal scale trough {
+            min-height: 4px;
+            background: alpha(@borders, 0.2);
+            border-radius: 2px;
+        }
+        
+        .zoom-slider-minimal scale highlight {
+            background: @theme_selected_bg_color;
+            border-radius: 2px;
+        }
+        
+        .zoom-slider-minimal scale slider {
+            min-width: 14px;
+            min-height: 14px;
+            margin: -5px;
+            background: @theme_selected_bg_color;
+            border: 2px solid @theme_base_color;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px alpha(black, 0.15);
+        }
+        
+        .zoom-slider-minimal scale slider:hover {
+            box-shadow: 0 2px 6px alpha(black, 0.25);
         }
         
         /* Área de gestos */
@@ -813,75 +836,6 @@ class WaveControlGUI(Gtk.Window):
         gestures_card.pack_start(gestures_compact, False, False, 0)
         sidebar.pack_start(gestures_card, False, False, 0)
         
-        # Card de Zoom Compacto
-        zoom_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        zoom_card.get_style_context().add_class("compact-card")
-        
-        zoom_title = Gtk.Label(label="Zoom Digital")
-        zoom_title.get_style_context().add_class("card-title")
-        zoom_title.set_halign(Gtk.Align.START)
-        
-        # Controles de zoom inline
-        zoom_inline = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        zoom_inline.get_style_context().add_class("zoom-inline")
-        
-        # Label do zoom atual
-        self.zoom_value_label = Gtk.Label(label=f"{DEFAULT_ZOOM:.1f}x")
-        self.zoom_value_label.get_style_context().add_class("zoom-value")
-        
-        # Slider compacto
-        zoom_adjustment = Gtk.Adjustment(
-            value=DEFAULT_ZOOM,
-            lower=MIN_ZOOM,
-            upper=MAX_ZOOM,
-            step_increment=0.1,
-            page_increment=0.5,
-            page_size=0
-        )
-        self.zoom_scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL, adjustment=zoom_adjustment)
-        self.zoom_scale.set_digits(1)
-        self.zoom_scale.set_draw_value(False)
-        self.zoom_scale.set_size_request(200, -1)
-        self.zoom_scale.connect("value-changed", self.on_zoom_changed)
-        
-        # Botões de zoom em linha
-        zoom_buttons_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
-        zoom_buttons_row.get_style_context().add_class("zoom-buttons-row")
-        zoom_buttons_row.set_homogeneous(True)
-        
-        self.zoom_1x_btn = Gtk.Button.new_with_label("1x")
-        self.zoom_1x_btn.get_style_context().add_class("secondary-button")
-        self.zoom_1x_btn.connect("clicked", lambda btn: self.set_zoom(1.0))
-        self.zoom_1x_btn.set_tooltip_text("Sem zoom (padrão)")
-        
-        self.zoom_2x_btn = Gtk.Button.new_with_label("2x")
-        self.zoom_2x_btn.get_style_context().add_class("secondary-button")
-        self.zoom_2x_btn.connect("clicked", lambda btn: self.set_zoom(2.0))
-        self.zoom_2x_btn.set_tooltip_text("Zoom 2x - aproxima a imagem")
-        
-        self.zoom_3x_btn = Gtk.Button.new_with_label("3x")
-        self.zoom_3x_btn.get_style_context().add_class("secondary-button")
-        self.zoom_3x_btn.connect("clicked", lambda btn: self.set_zoom(3.0))
-        self.zoom_3x_btn.set_tooltip_text("Zoom 3x - aproxima mais")
-        
-        self.zoom_4x_btn = Gtk.Button.new_with_label("4x")
-        self.zoom_4x_btn.get_style_context().add_class("secondary-button")
-        self.zoom_4x_btn.connect("clicked", lambda btn: self.set_zoom(4.0))
-        self.zoom_4x_btn.set_tooltip_text("Zoom 4x - máximo aproximação")
-        
-        zoom_buttons_row.pack_start(self.zoom_1x_btn, True, True, 0)
-        zoom_buttons_row.pack_start(self.zoom_2x_btn, True, True, 0)
-        zoom_buttons_row.pack_start(self.zoom_3x_btn, True, True, 0)
-        zoom_buttons_row.pack_start(self.zoom_4x_btn, True, True, 0)
-        
-        zoom_inline.pack_start(self.zoom_value_label, False, False, 0)
-        zoom_inline.pack_start(self.zoom_scale, False, False, 0)
-        zoom_inline.pack_start(zoom_buttons_row, False, False, 0)
-        
-        zoom_card.pack_start(zoom_title, False, False, 0)
-        zoom_card.pack_start(zoom_inline, False, False, 0)
-        sidebar.pack_start(zoom_card, False, False, 0)
-        
         # Card de Status Compacto
         status_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         status_card.get_style_context().add_class("compact-card")
@@ -956,11 +910,44 @@ class WaveControlGUI(Gtk.Window):
         fps_item.pack_start(fps_label, False, False, 0)
         fps_item.pack_end(self.fps_label, False, False, 0)
         
+        # Slider de Zoom Minimalista Inline
+        zoom_inline_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        zoom_inline_item.get_style_context().add_class("zoom-inline-minimal")
+        zoom_inline_item.set_margin_top(8)
+        
+        zoom_inline_label = Gtk.Label(label="Zoom:")
+        zoom_inline_label.get_style_context().add_class("status-label")
+        zoom_inline_label.set_opacity(0.7)
+        
+        self.zoom_value_label = Gtk.Label(label=f"{DEFAULT_ZOOM:.1f}x")
+        self.zoom_value_label.get_style_context().add_class("zoom-value-minimal")
+        self.zoom_value_label.set_opacity(0.8)
+        
+        zoom_adjustment = Gtk.Adjustment(
+            value=DEFAULT_ZOOM,
+            lower=MIN_ZOOM,
+            upper=MAX_ZOOM,
+            step_increment=0.1,
+            page_increment=0.5,
+            page_size=0
+        )
+        self.zoom_scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL, adjustment=zoom_adjustment)
+        self.zoom_scale.set_digits(1)
+        self.zoom_scale.set_draw_value(False)
+        self.zoom_scale.set_size_request(120, -1)
+        self.zoom_scale.get_style_context().add_class("zoom-slider-minimal")
+        self.zoom_scale.connect("value-changed", self.on_zoom_changed)
+        
+        zoom_inline_item.pack_start(zoom_inline_label, False, False, 0)
+        zoom_inline_item.pack_start(self.zoom_scale, True, True, 0)
+        zoom_inline_item.pack_end(self.zoom_value_label, False, False, 0)
+        
         status_grid.pack_start(self.status_label, False, False, 0)
         status_grid.pack_start(action_item, False, False, 0)
         status_grid.pack_start(filter_item, False, False, 0)
         status_grid.pack_start(confidence_item, False, False, 0)
         status_grid.pack_start(fps_item, False, False, 0)
+        status_grid.pack_start(zoom_inline_item, False, False, 0)
         
         status_card.pack_start(status_title, False, False, 0)
         status_card.pack_start(status_grid, False, False, 0)
