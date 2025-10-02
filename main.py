@@ -18,11 +18,13 @@ from analytics import get_analytics
 # ===== Configurações =====
 MIN_DET = 0.6
 MIN_TRK = 0.6
-# Sistema baseado em estado neutral (sem cooldown de tempo)
 CALIBRATION_S = 2.0     # tempo inicial para estabilizar câmera
 DRAW = True             # mostrar janela com landmarks
 CAM_INDEX = 0           # índice da webcam
 TARGET_FPS = 30         # FPS alvo (limita uso de CPU)
+
+# ===== Cooldown entre comandos =====
+ACTION_COOLDOWN_S = 0.8  # Tempo mínimo entre ações (evita comandos fantasma durante transições)
 
 # ===== Configurações de Zoom =====
 DEFAULT_ZOOM = 1.0      # zoom padrão (sem zoom)
@@ -424,6 +426,7 @@ class WaveControlGUI(Gtk.Window):
         self.start_ts = None
         self.last_action = "neutral"
         self.action_executed = False
+        self.last_action_time = 0  # Timestamp da última ação (para cooldown)
         self.zoom_level = DEFAULT_ZOOM
         
         # Frame pooling para reduzir alocações
@@ -1435,25 +1438,33 @@ class WaveControlGUI(Gtk.Window):
                 else:
                     # Esconde barra de calibração após finalizar
                     GLib.idle_add(self.calibration_box.hide)
-                    # Lógica de execução de ações
+                    
+                    # Lógica de execução de ações com cooldown
+                    time_since_last_action = now - self.last_action_time
+                    
                     if action == "neutral":
+                        # Neutral sempre reseta o flag de ação executada
                         if self.action_executed:
                             self.action_executed = False
                     elif action != "neutral" and not self.action_executed:
-                        if action == "next":
-                            press_next()
-                            self.analytics.record_gesture("next")
-                        elif action == "prev":
-                            press_prev()
-                            self.analytics.record_gesture("prev")
-                        elif action == "home":
-                            press_home()
-                            self.analytics.record_gesture("home")
-                        elif action == "end":
-                            press_end()
-                            self.analytics.record_gesture("end")
-                        self.action_executed = True
-                        self.last_action = action
+                        # Verifica cooldown: só executa se passou tempo suficiente desde última ação
+                        if time_since_last_action >= ACTION_COOLDOWN_S:
+                            if action == "next":
+                                press_next()
+                                self.analytics.record_gesture("next")
+                            elif action == "prev":
+                                press_prev()
+                                self.analytics.record_gesture("prev")
+                            elif action == "home":
+                                press_home()
+                                self.analytics.record_gesture("home")
+                            elif action == "end":
+                                press_end()
+                                self.analytics.record_gesture("end")
+                            
+                            self.action_executed = True
+                            self.last_action = action
+                            self.last_action_time = now  # Registra timestamp da ação
                 
                 # OTIMIZAÇÃO: Agrupa todas as atualizações de UI em uma única função
                 # para reduzir overhead de GLib.idle_add
