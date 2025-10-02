@@ -751,6 +751,13 @@ class WaveControlGUI(Gtk.Window):
             box-shadow: 0 0 0 2px alpha(@theme_selected_bg_color, 0.3);
         }
         
+        /* Efeito flash quando executa ação */
+        .gesture-flash {
+            background: @theme_selected_bg_color;
+            color: @theme_selected_fg_color;
+            box-shadow: 0 0 12px alpha(@theme_selected_bg_color, 0.8);
+        }
+        
         /* Rodapé minimalista */
         .footer {
             background: alpha(@theme_bg_color, 0.8);
@@ -859,19 +866,24 @@ class WaveControlGUI(Gtk.Window):
         gestures_compact = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         gestures_compact.get_style_context().add_class("gestures-compact")
         
-        gestures = [
-            "👆 1 → Próximo",
-            "✌️ 2 → Anterior",
-            "🤟 3 → Início", 
-            "🖖 4 → Fim",
-            "✊ 0 → Neutro"
+        # Mapeia gestos para labels (para animação)
+        gestures_data = [
+            ("next", "👆 1 → Próximo"),
+            ("prev", "✌️ 2 → Anterior"),
+            ("home", "🤟 3 → Início"), 
+            ("end", "🖖 4 → Fim"),
+            ("neutral", "✊ 0 → Neutro")
         ]
         
-        for gesture in gestures:
-            gesture_item = Gtk.Label(label=gesture)
+        # Dicionário para acessar labels dos gestos
+        self.gesture_labels = {}
+        
+        for gesture_id, gesture_text in gestures_data:
+            gesture_item = Gtk.Label(label=gesture_text)
             gesture_item.get_style_context().add_class("gesture-compact")
             gesture_item.set_halign(Gtk.Align.START)
             gestures_compact.pack_start(gesture_item, False, False, 0)
+            self.gesture_labels[gesture_id] = gesture_item
         
         gestures_card.pack_start(gestures_title, False, False, 0)
         gestures_card.pack_start(gestures_compact, False, False, 0)
