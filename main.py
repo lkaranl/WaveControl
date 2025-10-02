@@ -343,104 +343,36 @@ def press_home():
 def press_end():
     kb.emit_key('end')
 
-def calculate_hand_size(landmarks):
+def apply_manual_zoom(frame, zoom_level=1.0):
     """
-    Calcula o tamanho da mão baseado nos landmarks
-    Retorna a distância entre o pulso e o dedo médio
-    """
-    wrist = landmarks[0]
-    middle_tip = landmarks[12]
-    
-    # Calcula distância euclidiana
-    dx = middle_tip.x - wrist.x
-    dy = middle_tip.y - wrist.y
-    distance = (dx * dx + dy * dy) ** 0.5
-    
-    return distance
-
-
-def calculate_hand_center(landmarks):
-    """Calcula o centro da mão baseado nos landmarks"""
-    # Usa média de landmarks chave
-    x_coords = [lm.x for lm in landmarks]
-    y_coords = [lm.y for lm in landmarks]
-    
-    center_x = sum(x_coords) / len(x_coords)
-    center_y = sum(y_coords) / len(y_coords)
-    
-    return center_x, center_y
-
-
-def apply_smart_zoom(frame, landmarks=None, manual_zoom=1.0, enable_auto=True):
-    """
-    Aplica zoom digital inteligente
+    Aplica zoom digital manual centralizado
     
     Args:
         frame: Frame original
-        landmarks: Landmarks da mão (opcional, para auto-zoom)
-        manual_zoom: Nível de zoom manual
-        enable_auto: Habilita auto-zoom baseado na distância da mão
+        zoom_level: Nível de zoom (1.0 = sem zoom, 2.0 = 2x, etc.)
     
     Returns:
         Frame com zoom aplicado
     """
-    height, width = frame.shape[:2]
-    zoom_level = manual_zoom
-    center_x, center_y = 0.5, 0.5  # Centro padrão
-    
-    # Auto-zoom: ajusta baseado no tamanho da mão
-    if enable_auto and landmarks is not None:
-        hand_size = calculate_hand_size(landmarks)
-        center_x, center_y = calculate_hand_center(landmarks)
-        
-        # Ajusta zoom baseado no tamanho da mão
-        # Mão pequena (longe) = mais zoom
-        # Mão grande (perto) = menos zoom
-        if hand_size < 0.15:  # Muito longe
-            auto_zoom = 2.0
-        elif hand_size < 0.25:  # Longe
-            auto_zoom = 1.5
-        elif hand_size < 0.35:  # Distância média
-            auto_zoom = 1.2
-        else:  # Perto
-            auto_zoom = 1.0
-        
-        # Combina zoom manual e automático
-        zoom_level = max(manual_zoom, auto_zoom)
-    
     if zoom_level <= 1.0:
-        return frame, 1.0
+        return frame
     
-    # Calcula região a ser extraída (ROI centrado na mão)
+    height, width = frame.shape[:2]
+    
+    # Calcula dimensões do ROI (região de interesse)
     crop_width = int(width / zoom_level)
     crop_height = int(height / zoom_level)
     
-    # Centraliza no centro da mão (com limites)
-    center_x = max(0.0, min(1.0, center_x))
-    center_y = max(0.0, min(1.0, center_y))
-    
-    start_x = int(center_x * width - crop_width / 2)
-    start_y = int(center_y * height - crop_height / 2)
-    
-    # Garante que está dentro dos limites
-    start_x = max(0, min(width - crop_width, start_x))
-    start_y = max(0, min(height - crop_height, start_y))
-    
+    # Centraliza o ROI
+    start_x = (width - crop_width) // 2
+    start_y = (height - crop_height) // 2
     end_x = start_x + crop_width
     end_y = start_y + crop_height
     
-    # Extrai a região
+    # Extrai ROI e redimensiona para tamanho original
     cropped = frame[start_y:end_y, start_x:end_x]
-    
-    # Redimensiona
     zoomed = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
     
-    return zoomed, zoom_level
-
-
-def apply_digital_zoom(frame, zoom_level):
-    """Compatibilidade: aplica zoom digital simples"""
-    zoomed, _ = apply_smart_zoom(frame, landmarks=None, manual_zoom=zoom_level, enable_auto=False)
     return zoomed
 
 # ===== Interface Gráfica GTK =====
@@ -464,8 +396,6 @@ class WaveControlGUI(Gtk.Window):
         self.last_action = "neutral"
         self.action_executed = False
         self.zoom_level = DEFAULT_ZOOM
-        self.auto_zoom_enabled = False  # Auto-zoom desabilitado por padrão para melhor reconhecimento
-        self.current_auto_zoom = 1.0
         
         # Frame pooling para reduzir alocações
         self._frame_buffer = None
@@ -1136,6 +1066,12 @@ class WaveControlGUI(Gtk.Window):
         footer_info.set_halign(Gtk.Align.START)
         footer_info.get_style_context().add_class("status-label")
         
+        # Atalhos de teclado
+        shortcuts_label = Gtk.Label(label="⌨️ Espaço: Iniciar/Parar • Z: Zoom • Esc: Sair")
+        shortcuts_label.set_halign(Gtk.Align.CENTER)
+        shortcuts_label.get_style_context().add_class("status-label")
+        shortcuts_label.set_opacity(0.6)
+        
         # Label discreta mostrando o backend (X11 ou Wayland)
         backend_name = "Wayland (evdev)" if is_wayland() else "X11 (uinput)"
         backend_label = Gtk.Label(label=f"🖥️ {backend_name}")
@@ -1144,6 +1080,7 @@ class WaveControlGUI(Gtk.Window):
         backend_label.set_opacity(0.7)  # Torna mais discreto
         
         footer.pack_start(footer_info, True, True, 0)
+        footer.pack_start(shortcuts_label, False, False, 0)
         footer.pack_end(backend_label, False, False, 0)
         main_container.pack_end(footer, False, False, 0)
         
@@ -1157,11 +1094,44 @@ class WaveControlGUI(Gtk.Window):
         self.zoom_value_label.set_text(f"{zoom_value:.1f}x")
     
     def on_key_press(self, widget, event):
-        """Captura eventos de teclado (Esc para sair do modo teatro)"""
-        if event.keyval == Gdk.KEY_Escape and self.theater_mode:
-            self.theater_mode = False
-            self.unfullscreen()
+        """
+        Captura eventos de teclado - Atalhos:
+        - Espaço: Iniciar/Parar detecção
+        - Esc: Sair do modo teatro ou fechar app
+        - Z: Ciclar zoom (1x → 2x → 3x → 4x → 1x)
+        """
+        # Esc: Sair do modo teatro ou fechar app
+        if event.keyval == Gdk.KEY_Escape:
+            if self.theater_mode:
+                self.theater_mode = False
+                self.unfullscreen()
+                return True
+            else:
+                # Fecha a aplicação
+                self.on_window_destroy(widget)
+                return True
+        
+        # Espaço: Iniciar/Parar
+        elif event.keyval == Gdk.KEY_space:
+            self.on_start_clicked(None)
             return True
+        
+        # Z: Ciclar zoom (1x → 2x → 3x → 4x → 1x)
+        elif event.keyval == Gdk.KEY_z or event.keyval == Gdk.KEY_Z:
+            current_zoom = self.zoom_level
+            zoom_levels = [1.0, 2.0, 3.0, 4.0]
+            
+            # Encontra próximo nível de zoom
+            try:
+                current_index = zoom_levels.index(current_zoom)
+                next_index = (current_index + 1) % len(zoom_levels)
+            except ValueError:
+                next_index = 0
+            
+            next_zoom = zoom_levels[next_index]
+            self.set_zoom(next_zoom)
+            return True
+        
         return False
     
     def on_video_clicked(self, widget, event):
@@ -1180,9 +1150,6 @@ class WaveControlGUI(Gtk.Window):
                 self.fullscreen()
             else:
                 self.unfullscreen()
-    
-    def on_auto_zoom_toggled(self, checkbox):
-        self.auto_zoom_enabled = checkbox.get_active()
     
     def on_start_clicked(self, button):
         if not self.is_running:
@@ -1282,13 +1249,8 @@ class WaveControlGUI(Gtk.Window):
         if res.multi_hand_landmarks:
             hand_landmarks = res.multi_hand_landmarks[0].landmark
         
-        # Aplica zoom no frame BGR (após detecção)
-        frame, actual_zoom = apply_smart_zoom(
-            frame,
-            landmarks=hand_landmarks,
-            manual_zoom=zoom_level,
-            enable_auto=self.auto_zoom_enabled if hasattr(self, 'auto_zoom_enabled') else False
-        )
+        # Aplica zoom manual no frame BGR (após detecção)
+        frame = apply_manual_zoom(frame, zoom_level)
         
         # Métrica de tempo de processamento
         processing_time = (time.perf_counter() - start_time) * 1000
@@ -1410,13 +1372,6 @@ class WaveControlGUI(Gtk.Window):
                 
                 has_hand = res is not None and res.multi_hand_landmarks is not None and len(res.multi_hand_landmarks) > 0
                 GLib.idle_add(update_hand_detection_visual, has_hand)
-            
-                # Informações visuais na tela
-                if hasattr(self, 'current_auto_zoom') and self.current_auto_zoom > 1.0:
-                    zoom_text = f"Zoom: {self.current_auto_zoom:.1f}x"
-                    if self.auto_zoom_enabled:
-                        zoom_text += " (Auto)"
-                    cv2.putText(frame, zoom_text, (20, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
                 
                 # Calibração inicial com feedback visual
                 elapsed_calibration = now - self.start_ts
