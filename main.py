@@ -966,77 +966,6 @@ class WaveControlGUI(Gtk.Window):
         status_card.pack_start(status_grid, False, False, 0)
         sidebar.pack_start(status_card, False, False, 0)
         
-        # Card de Configurações (ÚLTIMO)
-        config_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        config_card.get_style_context().add_class("compact-card")
-        
-        config_title = Gtk.Label(label="Configurações")
-        config_title.get_style_context().add_class("card-title")
-        config_title.set_halign(Gtk.Align.START)
-        
-        # Checkbox compacto
-        self.show_landmarks_check = Gtk.CheckButton.new_with_label("Mostrar landmarks")
-        self.show_landmarks_check.set_active(DRAW)
-        self.show_landmarks_check.set_tooltip_text("Mostra pontos de rastreamento da mão no vídeo")
-        
-        # Auto-zoom
-        self.auto_zoom_check = Gtk.CheckButton.new_with_label("Auto-zoom inteligente")
-        self.auto_zoom_check.set_active(True)
-        self.auto_zoom_check.set_tooltip_text("Ajusta zoom automaticamente baseado na distância da mão")
-        self.auto_zoom_check.connect("toggled", self.on_auto_zoom_toggled)
-        
-        config_card.pack_start(config_title, False, False, 0)
-        config_card.pack_start(self.show_landmarks_check, False, False, 0)
-        config_card.pack_start(self.auto_zoom_check, False, False, 0)
-        sidebar.pack_start(config_card, False, False, 0)
-        
-        # Card de Métricas (Analytics)
-        metrics_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        metrics_card.get_style_context().add_class("compact-card")
-        
-        metrics_title = Gtk.Label(label="Métricas")
-        metrics_title.get_style_context().add_class("card-title")
-        metrics_title.set_halign(Gtk.Align.START)
-        
-        # Grid de métricas
-        metrics_grid = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        metrics_grid.get_style_context().add_class("status-grid")
-        
-        # Total de gestos
-        gestures_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        gestures_item.get_style_context().add_class("status-item")
-        
-        gestures_label = Gtk.Label(label="Gestos:")
-        gestures_label.get_style_context().add_class("status-label")
-        
-        self.total_gestures_label = Gtk.Label(label="0")
-        self.total_gestures_label.get_style_context().add_class("status-indicator")
-        self.total_gestures_label.set_tooltip_text("Total de gestos executados nesta sessão")
-        
-        gestures_item.pack_start(gestures_label, False, False, 0)
-        gestures_item.pack_end(self.total_gestures_label, False, False, 0)
-        
-        # Frames processados
-        frames_item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        frames_item.get_style_context().add_class("status-item")
-        
-        frames_label = Gtk.Label(label="Frames:")
-        frames_label.get_style_context().add_class("status-label")
-        
-        self.total_frames_label = Gtk.Label(label="0")
-        self.total_frames_label.get_style_context().add_class("status-indicator")
-        self.total_frames_label.set_tooltip_text("Total de frames processados pelo sistema")
-        
-        frames_item.pack_start(frames_label, False, False, 0)
-        frames_item.pack_end(self.total_frames_label, False, False, 0)
-        
-        metrics_grid.pack_start(gestures_item, False, False, 0)
-        metrics_grid.pack_start(frames_item, False, False, 0)
-        
-        metrics_card.pack_start(metrics_title, False, False, 0)
-        metrics_card.pack_start(metrics_grid, False, False, 0)
-        sidebar.pack_start(metrics_card, False, False, 0)
-        
         # === ÁREA PRINCIPAL MAXIMIZADA ===
         main_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         main_content.get_style_context().add_class("main-content")
@@ -1230,9 +1159,7 @@ class WaveControlGUI(Gtk.Window):
         self.fps_label.set_text("0.0")
         
         # Reset métricas
-        stats = self.analytics.get_stats_summary()
-        self.total_gestures_label.set_text(str(stats['usage']['total_gestures']))
-        self.total_frames_label.set_text(str(stats['performance']['total_frames']))
+        # Removido: labels de métricas simplificadas
         
     def _process_frame_async(self, frame_data):
         """Processa frame em thread separada"""
@@ -1328,7 +1255,7 @@ class WaveControlGUI(Gtk.Window):
                 
                 # Envia frame para processamento assíncrono
                 try:
-                    frame_data = (frame.copy(), self.zoom_level, self.show_landmarks_check.get_active())
+                    frame_data = (frame.copy(), self.zoom_level, DRAW)  # Usar constante DRAW
                     self._frame_queue.put(frame_data, block=False)
                 except queue.Full:
                     self.analytics.record_dropped_frame()
@@ -1427,8 +1354,7 @@ class WaveControlGUI(Gtk.Window):
                 total_frames = stats['performance']['total_frames']
                 
                 GLib.idle_add(self.fps_label.set_text, f"{fps_value:.1f}")
-                GLib.idle_add(self.total_gestures_label.set_text, str(total_gestures))
-                GLib.idle_add(self.total_frames_label.set_text, str(total_frames))
+                # Removido: atualização de labels de métricas
                 
                 # Converte frame para exibição na GUI
                 height, width, channels = frame.shape
