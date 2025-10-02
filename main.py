@@ -558,6 +558,23 @@ class WaveControlGUI(Gtk.Window):
             background: black;
             border-radius: 20px;
             min-height: 400px;
+            border: 3px solid alpha(@borders, 0.3);
+            transition: border-color 300ms ease;
+        }
+        
+        /* Estados de detecção de mão */
+        .hand-detected {
+            border-color: #4CAF50;
+            box-shadow: 0 0 20px alpha(#4CAF50, 0.3);
+        }
+        
+        .hand-partial {
+            border-color: #FFC107;
+            box-shadow: 0 0 20px alpha(#FFC107, 0.3);
+        }
+        
+        .hand-none {
+            border-color: alpha(@borders, 0.3);
         }
         
         .video-placeholder {
@@ -757,6 +774,49 @@ class WaveControlGUI(Gtk.Window):
             background: @theme_selected_bg_color;
             color: @theme_selected_fg_color;
             box-shadow: 0 0 12px alpha(@theme_selected_bg_color, 0.8);
+        }
+        
+        /* Calibração */
+        .calibration-container {
+            background: alpha(@theme_selected_bg_color, 0.05);
+            border-radius: 8px;
+            padding: 12px;
+        }
+        
+        .calibration-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: @theme_selected_bg_color;
+            margin-bottom: 4px;
+        }
+        
+        .calibration-progress {
+            min-height: 6px;
+        }
+        
+        .calibration-progress progress {
+            background: alpha(@borders, 0.2);
+            border-radius: 3px;
+        }
+        
+        .calibration-progress trough {
+            min-height: 6px;
+            background: alpha(@borders, 0.2);
+            border-radius: 3px;
+        }
+        
+        .calibration-progress progress {
+            background: @theme_selected_bg_color;
+            border-radius: 3px;
+        }
+        
+        /* Indicador de status da mão */
+        .hand-status-label {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: alpha(@theme_bg_color, 0.8);
         }
         
         /* Rodapé minimalista */
@@ -1027,6 +1087,42 @@ class WaveControlGUI(Gtk.Window):
         self.video_event_box.add(video_container)
         
         video_wrapper.pack_start(self.video_event_box, True, True, 0)
+        
+        # === BARRA DE PROGRESSO DE CALIBRAÇÃO ===
+        calibration_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        calibration_box.set_margin_top(8)
+        calibration_box.set_margin_start(8)
+        calibration_box.set_margin_end(8)
+        calibration_box.get_style_context().add_class("calibration-container")
+        
+        # Label de calibração
+        self.calibration_label = Gtk.Label(label="")
+        self.calibration_label.get_style_context().add_class("calibration-label")
+        self.calibration_label.set_halign(Gtk.Align.START)
+        
+        # Progress bar
+        self.calibration_progress = Gtk.ProgressBar()
+        self.calibration_progress.get_style_context().add_class("calibration-progress")
+        self.calibration_progress.set_show_text(False)
+        self.calibration_progress.set_fraction(0.0)
+        
+        calibration_box.pack_start(self.calibration_label, False, False, 0)
+        calibration_box.pack_start(self.calibration_progress, False, False, 0)
+        
+        # Esconde por padrão
+        calibration_box.hide()
+        self.calibration_box = calibration_box
+        
+        video_wrapper.pack_start(calibration_box, False, False, 0)
+        
+        # Indicador visual de detecção de mão
+        self.hand_status_label = Gtk.Label(label="")
+        self.hand_status_label.get_style_context().add_class("hand-status-label")
+        self.hand_status_label.set_halign(Gtk.Align.CENTER)
+        self.hand_status_label.set_margin_top(8)
+        self.hand_status_label.hide()
+        video_wrapper.pack_start(self.hand_status_label, False, False, 0)
+        
         video_area.pack_start(video_wrapper, True, True, 0)
         main_content.pack_start(video_area, True, True, 0)
         
@@ -1293,6 +1389,27 @@ class WaveControlGUI(Gtk.Window):
                 frame = processed_frame
             
                 now = time.time()
+                
+                # Atualiza indicador visual de detecção de mão
+                def update_hand_detection_visual(has_hand):
+                    video_ctx = self.video_event_box.get_children()[0].get_style_context()
+                    
+                    # Remove todas as classes de estado
+                    video_ctx.remove_class("hand-detected")
+                    video_ctx.remove_class("hand-partial")
+                    video_ctx.remove_class("hand-none")
+                    
+                    if has_hand:
+                        video_ctx.add_class("hand-detected")
+                        self.hand_status_label.set_text("🟢 Mão detectada")
+                        self.hand_status_label.show()
+                    else:
+                        video_ctx.add_class("hand-none")
+                        self.hand_status_label.set_text("🔴 Nenhuma mão detectada")
+                        self.hand_status_label.show()
+                
+                has_hand = res is not None and res.multi_hand_landmarks is not None and len(res.multi_hand_landmarks) > 0
+                GLib.idle_add(update_hand_detection_visual, has_hand)
             
                 # Informações visuais na tela
                 if hasattr(self, 'current_auto_zoom') and self.current_auto_zoom > 1.0:
@@ -1301,10 +1418,24 @@ class WaveControlGUI(Gtk.Window):
                         zoom_text += " (Auto)"
                     cv2.putText(frame, zoom_text, (20, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
                 
-                # Calibração inicial
-                if now - self.start_ts < CALIBRATION_S:
+                # Calibração inicial com feedback visual
+                elapsed_calibration = now - self.start_ts
+                if elapsed_calibration < CALIBRATION_S:
                     cv2.putText(frame, "Calibrando...", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
+                    
+                    # Atualiza barra de progresso de calibração
+                    progress = min(elapsed_calibration / CALIBRATION_S, 1.0)
+                    remaining_time = max(0, CALIBRATION_S - elapsed_calibration)
+                    
+                    def update_calibration_ui(prog, remaining):
+                        self.calibration_box.show()
+                        self.calibration_label.set_text(f"Calibrando sistema... {remaining:.1f}s restantes")
+                        self.calibration_progress.set_fraction(prog)
+                    
+                    GLib.idle_add(update_calibration_ui, progress, remaining_time)
                 else:
+                    # Esconde barra de calibração após finalizar
+                    GLib.idle_add(self.calibration_box.hide)
                     # Lógica de execução de ações
                     if action == "neutral":
                         if self.action_executed:
