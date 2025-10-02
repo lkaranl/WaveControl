@@ -14,6 +14,53 @@ from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor
 import queue
 from analytics import get_analytics
+from datetime import datetime
+
+# ===== Sistema de Logs Melhorado =====
+class Logger:
+    """Sistema de logs colorido e organizado"""
+    
+    @staticmethod
+    def banner():
+        """Exibe banner de inicialização"""
+        print("\n" + "="*60)
+        print("  🌊 WaveControl - Controle por Gestos")
+        print("  Versão: 1.0.0")
+        print("  Por: Karan Luciano")
+        print("="*60)
+        
+    @staticmethod
+    def info(message, component="SISTEMA"):
+        """Log informativo"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] ℹ️  [{component}] {message}")
+    
+    @staticmethod
+    def success(message, component="SISTEMA"):
+        """Log de sucesso"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] ✅ [{component}] {message}")
+    
+    @staticmethod
+    def warning(message, component="SISTEMA"):
+        """Log de aviso"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] ⚠️  [{component}] {message}")
+    
+    @staticmethod
+    def error(message, component="SISTEMA"):
+        """Log de erro"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] ❌ [{component}] {message}")
+    
+    @staticmethod
+    def section(title):
+        """Inicia uma nova seção"""
+        print(f"\n{'─'*60}")
+        print(f"  {title}")
+        print(f"{'─'*60}")
+
+log = Logger()
 
 # ===== Configurações =====
 MIN_DET = 0.6
@@ -49,11 +96,15 @@ class KeyboardEmulator:
         self.is_wayland = is_wayland()
         self.backend = None
         
+        log.section("Inicializando Backend de Teclado")
+        
         if self.is_wayland:
-            print("🌊 Wayland detectado - usando evdev")
+            log.info("Ambiente Wayland detectado", "BACKEND")
+            log.info("Usando evdev para emulação de teclado", "BACKEND")
             self._init_wayland()
         else:
-            print("🪟 X11 detectado - usando uinput")
+            log.info("Ambiente X11 detectado", "BACKEND")
+            log.info("Usando uinput para emulação de teclado", "BACKEND")
             self._init_x11()
     
     def _init_x11(self):
@@ -67,11 +118,13 @@ class KeyboardEmulator:
                 uinput.KEY_END
             ])
             self.backend_type = 'uinput'
+            log.success("uinput inicializado com sucesso", "BACKEND")
         except Exception as e:
-            print(f"❌ Erro ao inicializar uinput: {e}")
-            print("💡 Execute: sudo modprobe uinput")
-            print("💡 Adicione seu usuário ao grupo input:")
-            print(f"   sudo usermod -aG input {os.getenv('USER')}")
+            log.error(f"Falha ao inicializar uinput: {e}", "BACKEND")
+            log.warning("Soluções possíveis:", "BACKEND")
+            log.info("  1. Execute: sudo modprobe uinput", "BACKEND")
+            log.info(f"  2. Adicione ao grupo: sudo usermod -aG input {os.getenv('USER')}", "BACKEND")
+            log.info("  3. Reinicie o sistema após executar os comandos acima", "BACKEND")
             sys.exit(1)
     
     def _init_wayland(self):
@@ -93,25 +146,24 @@ class KeyboardEmulator:
             self.backend = UInput(capabilities, name='WaveControl-Virtual-Keyboard')
             self.ecodes = e
             self.backend_type = 'evdev'
-            print("✅ evdev inicializado com sucesso (Wayland)")
+            log.success("evdev inicializado com sucesso (Wayland)", "BACKEND")
             
         except ImportError:
-            print("❌ evdev não está instalado!")
-            print("")
-            print("Instale com:")
-            print("  pip install evdev")
-            print("")
+            log.error("Biblioteca evdev não encontrada", "BACKEND")
+            log.warning("Soluções possíveis:", "BACKEND")
+            log.info("  1. Execute: pip install evdev", "BACKEND")
+            log.info("  2. Ou com pacote do sistema: sudo apt install python3-evdev", "BACKEND")
             sys.exit(1)
         except PermissionError:
-            print("❌ Sem permissão para criar dispositivo virtual!")
-            print("")
-            print("Execute com sudo ou configure uinput:")
-            print("  sudo modprobe uinput")
-            print("  sudo usermod -aG input $USER")
-            print("")
+            log.error("Sem permissão para criar dispositivo virtual", "BACKEND")
+            log.warning("Soluções possíveis:", "BACKEND")
+            log.info("  1. Execute: sudo modprobe uinput", "BACKEND")
+            log.info("  2. Adicione ao grupo: sudo usermod -aG input $USER", "BACKEND")
+            log.info("  3. Reinicie o sistema após executar os comandos acima", "BACKEND")
+            log.info("  4. Ou execute o WaveControl com sudo (não recomendado)", "BACKEND")
             sys.exit(1)
         except Exception as e:
-            print(f"❌ Erro ao inicializar evdev: {e}")
+            log.error(f"Erro inesperado ao inicializar evdev: {e}", "BACKEND")
             import traceback
             traceback.print_exc()
             sys.exit(1)
@@ -146,16 +198,17 @@ class KeyboardEmulator:
                 self.backend.write(self.ecodes.EV_KEY, key, 0)
                 self.backend.syn()
             except KeyError:
-                print(f"❌ Tecla '{key_name}' não mapeada!")
+                log.error(f"Tecla '{key_name}' não está mapeada", "BACKEND")
             except Exception as e:
-                print(f"⚠️  Erro ao emitir tecla {key_name}: {e}")
-                import traceback
-                traceback.print_exc()
+                log.warning(f"Erro ao emitir tecla {key_name}: {e}", "BACKEND")
 
 # Inicializar emulador de teclado
 kb = KeyboardEmulator()
 
 # ===== MediaPipe =====
+log.section("Inicializando MediaPipe")
+log.info("Carregando modelo de detecção de mãos...", "MEDIAPIPE")
+
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 
@@ -171,6 +224,7 @@ def get_mediapipe_hands():
     )
 
 hands = get_mediapipe_hands()
+log.success(f"MediaPipe inicializado (complexidade: 0, min_det: {MIN_DET}, min_trk: {MIN_TRK})", "MEDIAPIPE")
 
 # Pre-allocated DrawingSpecs para melhor performance (evita criar toda vez)
 _LANDMARK_DRAWING_SPEC = mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2)
@@ -1254,9 +1308,8 @@ class WaveControlGUI(Gtk.Window):
         self.header_start_button.set_label("▶ Iniciar")
         
         # Mostra estatísticas no terminal
-        print("\n" + "="*50)
+        log.section("Estatísticas da Sessão")
         self.analytics.print_stats()
-        print("="*50 + "\n")
         
         # Mostra placeholder e esconde vídeo
         self.video_image.clear()
@@ -1580,9 +1633,43 @@ class WaveControlGUI(Gtk.Window):
 
 # ===== Execução Principal =====
 def main():
-    app = WaveControlGUI()
-    app.show_all()
-    Gtk.main()
+    # Banner de inicialização
+    log.banner()
+    
+    # Informações do sistema
+    log.section("Informações do Sistema")
+    log.info(f"Sistema Operacional: {sys.platform}", "SISTEMA")
+    log.info(f"Python: {sys.version.split()[0]}", "SISTEMA")
+    log.info(f"OpenCV: {cv2.__version__}", "SISTEMA")
+    log.info(f"MediaPipe: {mp.__version__}", "SISTEMA")
+    
+    # Configurações
+    log.section("Configurações")
+    log.info(f"FPS alvo: {TARGET_FPS}", "CONFIG")
+    log.info(f"Cooldown entre ações: {ACTION_COOLDOWN_S}s", "CONFIG")
+    log.info(f"Janela de gestos: {GESTURE_WINDOW_SIZE} frames", "CONFIG")
+    log.info(f"Calibração inicial: {CALIBRATION_S}s", "CONFIG")
+    
+    # Inicialização da interface
+    log.section("Iniciando Interface Gráfica")
+    log.info("Carregando componentes GTK...", "GUI")
+    
+    try:
+        app = WaveControlGUI()
+        log.success("Interface carregada com sucesso", "GUI")
+        log.info("Pronto para uso! Use atalhos: Espaço=Iniciar/Parar, Z/X=Zoom, Esc=Sair", "GUI")
+        
+        app.show_all()
+        Gtk.main()
+    except KeyboardInterrupt:
+        log.warning("Interrompido pelo usuário (Ctrl+C)", "SISTEMA")
+    except Exception as e:
+        log.error(f"Erro fatal: {e}", "SISTEMA")
+        import traceback
+        traceback.print_exc()
+    finally:
+        log.section("Encerrando WaveControl")
+        log.info("Até logo! 👋", "SISTEMA")
 
 if __name__ == "__main__":
     main()
