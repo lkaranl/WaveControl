@@ -371,6 +371,24 @@ class WaveControlApp:
                     self.create_gesture_chip("🤟 3 dedos → Início", "home"),
                     self.create_gesture_chip("🖖 4 dedos → Fim", "arrow_downward"),
                     self.create_gesture_chip("✊ 0 dedos → Neutro", "back_hand"),
+                    ft.Divider(height=1, color="#424242"),  # Grey 800
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text(
+                                "💡 Como usar:",
+                                size=12,
+                                weight=ft.FontWeight.BOLD,
+                                color="#FFA726",  # Orange 400
+                            ),
+                            ft.Text(
+                                "1. Inicie a detecção aqui\n2. Abra seu app (PowerPoint, PDF)\n3. Clique no app para dar foco\n4. Faça os gestos!",
+                                size=10,
+                                color="#9E9E9E",  # Grey 500
+                                text_align=ft.TextAlign.LEFT,
+                            ),
+                        ], spacing=5),
+                        padding=ft.padding.only(top=5)
+                    ),
                 ], spacing=10),
                 padding=20
             ),
