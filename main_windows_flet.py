@@ -292,6 +292,21 @@ class WaveControlApp:
             visible=False  # Esconde até ter conteúdo
         )
         
+        # Loading da câmera
+        self.camera_loading = ft.Container(
+            content=ft.Column([
+                ft.ProgressRing(width=64, height=64, stroke_width=4, color="#1976D2"),
+                ft.Text("Abrindo câmera...", size=18, weight=ft.FontWeight.BOLD, color="#1976D2"),
+                ft.Text("Aguarde alguns segundos", size=14, color="#9E9E9E"),
+            ], 
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=15),
+            alignment=ft.alignment.center,
+            visible=False,
+            expand=True
+        )
+        
         self.gesture_label = ft.Text(
             f"{self.gesture_emojis['neutral']} neutral",
             size=48,
@@ -467,6 +482,7 @@ class WaveControlApp:
         
         self.video_container = ft.Stack([
             video_placeholder,
+            self.camera_loading,
             self.video_image
         ], expand=True)
         
@@ -587,6 +603,10 @@ class WaveControlApp:
         global gesture_history
         gesture_history.clear()
         
+        # Mostra loading
+        self.camera_loading.visible = True
+        self.page.update()
+        
         log.section("Iniciando Detecção de Gestos")
         log.info(f"Abrindo câmera (índice: {CAM_INDEX})...", "CAMERA")
         
@@ -596,9 +616,14 @@ class WaveControlApp:
         
         if not self.cap.isOpened():
             log.error("Falha ao acessar a câmera", "CAMERA")
+            self.camera_loading.visible = False
+            self.page.update()
             return
         
         log.success("Câmera aberta com sucesso", "CAMERA")
+        
+        # Esconde loading
+        self.camera_loading.visible = False
         self.is_running = True
         self.start_ts = time.time()
         
@@ -649,9 +674,10 @@ class WaveControlApp:
         self.status_text.value = "Sistema parado"
         self.status_text.color = "#FFA726"  # Orange 400
         
-        # Esconde o vídeo
+        # Esconde o vídeo e loading
         self.video_image.src_base64 = ""
         self.video_image.visible = False
+        self.camera_loading.visible = False
         
         self.page.update()
         
