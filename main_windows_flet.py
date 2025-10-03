@@ -322,8 +322,10 @@ class WaveControlApp:
             on_click=self.toggle_detection,
             style=ft.ButtonStyle(
                 color="#FFFFFF",  # White
-                bgcolor="#1976D2"  # Blue 700
-            )
+                bgcolor="#43A047",  # Green 600 - ação positiva
+                padding=ft.padding.symmetric(horizontal=20, vertical=10),
+            ),
+            height=45
         )
         
         # Build UI
@@ -346,7 +348,12 @@ class WaveControlApp:
             title=ft.Text("WaveControl", size=24, weight=ft.FontWeight.BOLD),
             center_title=False,
             bgcolor="#1976D2",  # Blue 700
-            actions=[self.start_button]
+            actions=[
+                ft.Container(
+                    content=self.start_button,
+                    padding=ft.padding.only(right=20, top=5, bottom=5),
+                )
+            ]
         )
         
         # Sidebar - Gestos
@@ -550,7 +557,7 @@ class WaveControlApp:
         
         self.start_button.text = "Iniciar"
         self.start_button.icon = "play_arrow"
-        self.start_button.style.bgcolor = "#1976D2"  # Blue 700
+        self.start_button.style.bgcolor = "#43A047"  # Green 600 - ação positiva
         
         self.status_text.value = "Sistema parado"
         self.status_text.color = "#FFA726"  # Orange 400
