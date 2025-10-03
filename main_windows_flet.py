@@ -66,6 +66,11 @@ CAM_INDEX = 0
 TARGET_FPS = 30
 ACTION_COOLDOWN_S = 0.8
 
+# Zoom Manual
+DEFAULT_ZOOM = 1.0
+MIN_ZOOM = 1.0
+MAX_ZOOM = 4.0
+
 # Filtro Temporal
 GESTURE_WINDOW_SIZE = 9
 CONSISTENCY_THRESHOLD = 0.78
@@ -222,6 +227,21 @@ def press_end():
     kb_controller.press(Key.end)
     kb_controller.release(Key.end)
 
+def apply_manual_zoom(frame, zoom_level):
+    """Aplica zoom manual ao frame"""
+    if zoom_level <= 1.0:
+        return frame
+    height, width = frame.shape[:2]
+    crop_width = int(width / zoom_level)
+    crop_height = int(height / zoom_level)
+    start_x = (width - crop_width) // 2
+    start_y = (height - crop_height) // 2
+    end_x = start_x + crop_width
+    end_y = start_y + crop_height
+    cropped = frame[start_y:end_y, start_x:end_x]
+    zoomed = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
+    return zoomed
+
 # ===== Aplicação Flet =====
 class WaveControlApp:
     def __init__(self, page: ft.Page):
@@ -255,6 +275,7 @@ class WaveControlApp:
         self.last_action = "neutral"
         self.action_executed = False
         self.last_action_time = 0
+        self.zoom_level = DEFAULT_ZOOM
         self.current_gesture = "neutral"
         self.fps = 0.0
         
@@ -285,6 +306,17 @@ class WaveControlApp:
         )
         
         self.fps_text = ft.Text("0.0", size=20, weight=ft.FontWeight.BOLD, color="#42A5F5")  # Blue 400
+        
+        self.zoom_slider = ft.Slider(
+            min=MIN_ZOOM,
+            max=MAX_ZOOM,
+            value=DEFAULT_ZOOM,
+            divisions=30,
+            label="{value}x",
+            on_change=self.on_zoom_change
+        )
+        
+        self.zoom_value_text = ft.Text(f"{DEFAULT_ZOOM:.1f}x", size=16, weight=ft.FontWeight.BOLD)
         
         self.start_button = ft.ElevatedButton(
             "Iniciar",
@@ -345,6 +377,27 @@ class WaveControlApp:
             elevation=2
         )
         
+        # Sidebar - Zoom Manual
+        zoom_card = ft.Card(
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Row([
+                        ft.Text("Zoom Manual", size=16, weight=ft.FontWeight.BOLD),
+                        self.zoom_value_text
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    self.zoom_slider,
+                    ft.Row([
+                        ft.TextButton("1x", on_click=lambda _: self.set_zoom(1.0)),
+                        ft.TextButton("2x", on_click=lambda _: self.set_zoom(2.0)),
+                        ft.TextButton("3x", on_click=lambda _: self.set_zoom(3.0)),
+                        ft.TextButton("4x", on_click=lambda _: self.set_zoom(4.0)),
+                    ], alignment=ft.MainAxisAlignment.SPACE_AROUND)
+                ], spacing=10),
+                padding=20
+            ),
+            elevation=2
+        )
+        
         # Sidebar - Status
         status_card = ft.Card(
             content=ft.Container(
@@ -369,6 +422,7 @@ class WaveControlApp:
         sidebar = ft.Container(
             content=ft.Column([
                 gestures_card,
+                zoom_card,
                 status_card
             ], spacing=15, scroll=ft.ScrollMode.AUTO),
             width=320,
@@ -412,6 +466,8 @@ class WaveControlApp:
             content=ft.Row([
                 ft.Text("WaveControl - Controle por gestos | Criado por Karan Luciano", 
                        size=12, color="#757575"),  # Grey 600
+                ft.Text("⌨️ Atalhos: ESPAÇO=Iniciar/Parar | Z/+=Zoom+ | X/-=Zoom- | ESC=Sair", 
+                       size=12, color="#9E9E9E"),  # Grey 500
                 ft.Text("🖥️ Windows (pynput)", size=12, color="#757575")  # Grey 600
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             padding=ft.padding.only(left=20, right=20, top=10, bottom=10),
@@ -441,10 +497,25 @@ class WaveControlApp:
             bgcolor="#2C2C2C"  # Surface variant dark
         )
     
+    def on_zoom_change(self, e):
+        """Atualiza o zoom quando o slider é movido"""
+        self.zoom_level = e.control.value
+        self.zoom_value_text.value = f"{self.zoom_level:.1f}x"
+        self.page.update()
+    
+    def set_zoom(self, value):
+        """Define o nível de zoom"""
+        self.zoom_level = value
+        self.zoom_slider.value = value
+        self.zoom_value_text.value = f"{value:.1f}x"
+        self.page.update()
+    
     def on_keyboard(self, e: ft.KeyboardEvent):
         """
         Atalhos de teclado:
         - Espaço: Iniciar/Parar detecção
+        - Z ou +: Zoom in (aumentar)
+        - X ou -: Zoom out (diminuir)
         - Esc: Fechar aplicação
         """
         if e.key == "Escape":
@@ -454,6 +525,32 @@ class WaveControlApp:
         elif e.key == " ":  # Espaço
             # Iniciar/Parar
             self.toggle_detection(None)
+        
+        elif e.key in ("Z", "z", "+", "="):  # Zoom in
+            current_zoom = self.zoom_level
+            zoom_levels = [1.0, 2.0, 3.0, 4.0]
+            
+            # Encontra próximo nível de zoom (para cima)
+            for zoom in zoom_levels:
+                if zoom > current_zoom:
+                    self.set_zoom(zoom)
+                    return
+            
+            # Se já está no máximo, mantém
+            self.set_zoom(MAX_ZOOM)
+        
+        elif e.key in ("X", "x", "-", "_"):  # Zoom out
+            current_zoom = self.zoom_level
+            zoom_levels = [1.0, 2.0, 3.0, 4.0]
+            
+            # Encontra próximo nível de zoom (para baixo)
+            for zoom in reversed(zoom_levels):
+                if zoom < current_zoom:
+                    self.set_zoom(zoom)
+                    return
+            
+            # Se já está no mínimo, mantém
+            self.set_zoom(MIN_ZOOM)
     
     def toggle_detection(self, e):
         if not self.is_running:
@@ -550,6 +647,10 @@ class WaveControlApp:
                 rgb = self._rgb_buffer
             
             res = hands.process(rgb)
+            
+            # Aplica zoom manual se necessário
+            if self.zoom_level > 1.0:
+                frame = apply_manual_zoom(frame, self.zoom_level)
             
             # Registra tempo de processamento
             processing_time = (time.perf_counter() - frame_start_time) * 1000
@@ -649,7 +750,7 @@ def main():
     
     log.section("Iniciando Interface Gráfica Flet")
     log.info("Carregando componentes...", "GUI")
-    log.info("Atalhos: Espaço=Iniciar/Parar, Esc=Sair", "GUI")
+    log.info("Atalhos: Espaço=Iniciar/Parar, Z/X=Zoom, Esc=Sair", "GUI")
     
     try:
         ft.app(target=WaveControlApp)
