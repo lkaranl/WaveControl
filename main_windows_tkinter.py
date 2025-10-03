@@ -351,6 +351,9 @@ class WaveControlApp:
         # Configurar estilo Windows nativo
         self.setup_style()
         
+        # Cor de fundo da janela principal (tema escuro)
+        self.root.configure(bg=self.colors['bg_primary'])
+        
         # Variáveis de controle
         self.is_running = False
         self.cap = None
@@ -398,27 +401,91 @@ class WaveControlApp:
         else:
             style.theme_use('default')
         
-        # Cores modernas do Windows
+        # Paleta moderna com alto contraste (WCAG AAA)
         self.colors = {
-            'bg': '#f0f0f0',
-            'fg': '#000000', 
-            'accent': '#0078d4',
-            'hover': '#106ebe',
-            'success': '#107c10',
-            'warning': '#ff8c00',
-            'error': '#d13438',
-            'card_bg': '#ffffff',
-            'border': '#d1d1d1'
+            # Backgrounds
+            'bg_primary': '#1e1e1e',      # Fundo escuro principal
+            'bg_secondary': '#252526',    # Fundo secundário (cards)
+            'bg_tertiary': '#2d2d30',     # Fundo terciário (hover)
+            'bg_sidebar': '#252526',      # Sidebar
+            'bg_header': '#2d2d30',       # Header
+            
+            # Texto
+            'text_primary': '#cccccc',    # Texto principal (alto contraste)
+            'text_secondary': '#969696',  # Texto secundário
+            'text_tertiary': '#6e6e6e',   # Texto terciário
+            'text_on_accent': '#ffffff',  # Texto em accent
+            
+            # Accent colors
+            'accent': '#007acc',          # Azul VS Code
+            'accent_hover': '#1c97ea',    # Hover
+            'accent_light': '#094771',    # Background accent
+            
+            # Borders
+            'border_default': '#3e3e42',  # Borda padrão
+            'border_focus': '#007acc',    # Borda focus
+            'border_subtle': '#2d2d30',   # Borda sutil
+            
+            # Status colors (vibrantes para destacar)
+            'success': '#4ec9b0',         # Cyan-verde
+            'warning': '#dcdcaa',         # Amarelo suave
+            'error': '#f48771',           # Vermelho suave
+            'info': '#9cdcfe',            # Azul claro
+            
+            # Gesture colors (palette completa e harmoniosa)
+            'gesture_next': '#4ec9b0',    # Cyan (next/forward)
+            'gesture_prev': '#569cd6',    # Azul (prev/back)
+            'gesture_home': '#c586c0',    # Roxo (home)
+            'gesture_end': '#ce9178',     # Laranja (end)
+            'gesture_neutral': '#6e6e6e', # Cinza neutro
+            
+            # Video area
+            'video_bg': '#1a1a1a',        # Fundo do vídeo
+            'video_border': '#007acc',    # Borda quando ativo
         }
         
-        # Configurar estilos customizados
-        style.configure('Card.TFrame', background=self.colors['card_bg'], relief='solid', borderwidth=1)
-        style.configure('Header.TFrame', background=self.colors['bg'])
-        style.configure('Accent.TButton', foreground='white', background=self.colors['accent'])
-        style.configure('Success.TLabel', foreground=self.colors['success'], font=('Arial', 9, 'bold'))
-        style.configure('Warning.TLabel', foreground=self.colors['warning'], font=('Arial', 9, 'bold'))
-        style.configure('Title.TLabel', font=('Arial', 16, 'bold'))
-        style.configure('Subtitle.TLabel', font=('Arial', 10, 'bold'))
+        # Configurar estilos customizados com tema escuro
+        style.configure('TFrame', background=self.colors['bg_primary'])
+        style.configure('Card.TFrame', background=self.colors['bg_secondary'], relief='flat')
+        style.configure('Header.TFrame', background=self.colors['bg_header'])
+        
+        # Botão accent
+        style.configure('Accent.TButton', 
+                       foreground=self.colors['text_on_accent'], 
+                       background=self.colors['accent'],
+                       font=('Segoe UI', 10, 'bold'), 
+                       borderwidth=1,
+                       relief='flat')
+        style.map('Accent.TButton',
+                 background=[('active', self.colors['accent_hover'])])
+        
+        # Labels
+        style.configure('TLabel', 
+                       background=self.colors['bg_primary'], 
+                       foreground=self.colors['text_primary'],
+                       font=('Segoe UI', 10))
+        style.configure('Title.TLabel', 
+                       font=('Segoe UI', 18, 'bold'), 
+                       foreground=self.colors['text_primary'],
+                       background=self.colors['bg_header'])
+        style.configure('Subtitle.TLabel', 
+                       font=('Segoe UI', 11, 'bold'), 
+                       foreground=self.colors['accent'])
+        style.configure('Secondary.TLabel', 
+                       font=('Segoe UI', 9), 
+                       foreground=self.colors['text_secondary'])
+        
+        # LabelFrame
+        style.configure('TLabelframe', 
+                       background=self.colors['bg_secondary'],
+                       foreground=self.colors['text_primary'],
+                       bordercolor=self.colors['border_default'],
+                       relief='solid',
+                       borderwidth=1)
+        style.configure('TLabelframe.Label', 
+                       background=self.colors['bg_secondary'],
+                       foreground=self.colors['accent'],
+                       font=('Segoe UI', 10, 'bold'))
         
     def setup_ui(self):
         # Container principal
@@ -433,10 +500,26 @@ class WaveControlApp:
         header_left = ttk.Frame(header_frame)
         header_left.pack(side='left', fill='y')
         
-        title_label = ttk.Label(header_left, text="WaveControl - Windows", style='Title.TLabel')
+        title_label = ttk.Label(header_left, text="WaveControl", style='Title.TLabel')
         title_label.pack(anchor='w')
         
-        self.status_label = ttk.Label(header_left, text="Sistema parado", foreground=self.colors['warning'])
+        # Separador visual
+        separator_label = tk.Label(header_left, text="|", font=('Segoe UI', 18), 
+                                   foreground=self.colors['border_default'],
+                                   bg=self.colors['bg_header'])
+        separator_label.pack(side='left', padx=12)
+        
+        # Gesto atual no header
+        self.header_gesture = tk.Label(header_left, text="✊ neutral", 
+                                       font=('Segoe UI', 14, 'bold'),
+                                       foreground=self.colors['gesture_neutral'],
+                                       bg=self.colors['bg_header'])
+        self.header_gesture.pack(side='left')
+        
+        self.status_label = tk.Label(header_left, text="Sistema parado", 
+                                     font=('Segoe UI', 9), 
+                                     foreground=self.colors['text_secondary'],
+                                     bg=self.colors['bg_header'])
         self.status_label.pack(anchor='w', pady=(5, 0))
         
         # Controles
@@ -452,7 +535,10 @@ class WaveControlApp:
         content_frame.pack(fill='both', expand=True)
         
         # ===== SIDEBAR =====
-        sidebar = ttk.Frame(content_frame, style='Card.TFrame', width=300)
+        sidebar = tk.Frame(content_frame, bg=self.colors['bg_sidebar'], width=300,
+                          relief='flat', borderwidth=0,
+                          highlightbackground=self.colors['border_default'],
+                          highlightthickness=1)
         sidebar.pack(side='left', fill='y', padx=(0, 10))
         sidebar.pack_propagate(False)
         
@@ -466,49 +552,89 @@ class WaveControlApp:
         self.create_status_card(sidebar)
         
         # ===== ÁREA DE VÍDEO =====
-        video_frame = ttk.Frame(content_frame, style='Card.TFrame')
+        video_frame = tk.Frame(content_frame, bg=self.colors['bg_secondary'], 
+                              relief='flat', borderwidth=0, 
+                              highlightbackground=self.colors['border_default'],
+                              highlightthickness=1)
         video_frame.pack(side='right', fill='both', expand=True)
         
         # Container do vídeo
-        self.video_container = ttk.Frame(video_frame)
+        self.video_container = tk.Frame(video_frame, bg=self.colors['bg_secondary'])
         self.video_container.pack(fill='both', expand=True, padx=20, pady=20)
         
-        # Label do vídeo
-        self.video_label = ttk.Label(self.video_container, text="📷\n\nCâmera não ativada\n\nClique em 'Iniciar' para começar",
-                                    justify='center', font=('Arial', 14))
+        # Label do vídeo (placeholder)
+        placeholder_frame = tk.Frame(self.video_container, 
+                                    bg=self.colors['video_bg'],
+                                    relief='solid',
+                                    borderwidth=2,
+                                    highlightbackground=self.colors['border_default'],
+                                    highlightthickness=0)
+        placeholder_frame.pack(expand=True, fill='both')
+        
+        self.video_label = tk.Label(placeholder_frame, 
+                                    text="📷\n\nCâmera não ativada\n\nClique em 'Iniciar' para começar",
+                                    justify='center', font=('Segoe UI', 14),
+                                    bg=self.colors['video_bg'], 
+                                    fg=self.colors['text_secondary'])
         self.video_label.pack(expand=True)
         
         # ===== RODAPÉ =====
-        footer = ttk.Frame(main_container)
+        footer = tk.Frame(main_container, bg=self.colors['bg_secondary'],
+                         highlightbackground=self.colors['border_default'],
+                         highlightthickness=1)
         footer.pack(fill='x', pady=(10, 0))
         
-        footer_label = ttk.Label(footer, text="WaveControl Windows - Controle por gestos | Criado por Karan Luciano",
-                                font=('Arial', 9), foreground='gray')
-        footer_label.pack(anchor='center')
+        footer_label = tk.Label(footer, 
+                               text="WaveControl - Controle por gestos | Criado por Karan Luciano",
+                               font=('Segoe UI', 9), 
+                               foreground=self.colors['text_tertiary'],
+                               bg=self.colors['bg_secondary'])
+        footer_label.pack(side='left', anchor='w', padx=10, pady=8)
+        
+        # Label do backend
+        backend_label = tk.Label(footer, text="🖥️ Windows (pynput)",
+                                font=('Segoe UI', 9), 
+                                foreground=self.colors['text_tertiary'],
+                                bg=self.colors['bg_secondary'])
+        backend_label.pack(side='right', anchor='e', padx=10, pady=8)
     
     def create_gestures_card(self, parent):
         card = ttk.LabelFrame(parent, text="Gestos", padding=15)
-        card.pack(fill='x', pady=(0, 10))
+        card.pack(fill='x', pady=(10, 10), padx=10)
         
-        gestures = [
-            "👆 1 dedo → Próximo (→)",
-            "✌️ 2 dedos → Anterior (←)", 
-            "🤟 3 dedos → Início (Home)",
-            "🖖 4 dedos → Fim (End)",
-            "✊ 0 dedos → Neutro"
+        gestures_data = [
+            ("next", "👆 1 → Próximo", self.colors['gesture_next']),
+            ("prev", "✌️ 2 → Anterior", self.colors['gesture_prev']),
+            ("home", "🤟 3 → Início", self.colors['gesture_home']),
+            ("end", "🖖 4 → Fim", self.colors['gesture_end']),
+            ("neutral", "✊ 0 → Neutro", self.colors['gesture_neutral'])
         ]
         
-        for gesture in gestures:
-            label = ttk.Label(card, text=gesture, font=('Arial', 9))
-            label.pack(anchor='w', pady=2)
+        # Dicionário para acessar labels dos gestos
+        self.gesture_labels = {}
+        
+        for gesture_id, gesture_text, color in gestures_data:
+            frame = tk.Frame(card, bg=self.colors['bg_secondary'])
+            frame.pack(fill='x', pady=3)
+            
+            label = tk.Label(frame, text=gesture_text, 
+                           font=('Segoe UI', 10),
+                           bg=self.colors['bg_secondary'],
+                           fg=self.colors['text_primary'],
+                           anchor='w')
+            label.pack(side='left', fill='x', expand=True)
+            self.gesture_labels[gesture_id] = label
     
     def create_zoom_card(self, parent):
         card = ttk.LabelFrame(parent, text="Zoom Digital", padding=15)
-        card.pack(fill='x', pady=(0, 10))
+        card.pack(fill='x', pady=(0, 10), padx=10)
         
         # Valor atual
-        self.zoom_value_label = ttk.Label(card, text=f"{DEFAULT_ZOOM:.1f}x", style='Subtitle.TLabel')
-        self.zoom_value_label.pack(anchor='w')
+        self.zoom_value_label = tk.Label(card, text=f"{DEFAULT_ZOOM:.1f}x", 
+                                         font=('Segoe UI', 12, 'bold'),
+                                         foreground=self.colors['accent'],
+                                         bg=self.colors['bg_secondary'])
+        self.zoom_value_label.pack(anchor='w', pady=(0, 5))
         
         # Slider
         zoom_scale = ttk.Scale(card, from_=MIN_ZOOM, to=MAX_ZOOM, orient='horizontal',
@@ -527,30 +653,54 @@ class WaveControlApp:
     
     def create_status_card(self, parent):
         card = ttk.LabelFrame(parent, text="Status do Sistema", padding=15)
-        card.pack(fill='x', pady=(0, 10))
+        card.pack(fill='x', pady=(0, 10), padx=10)
         
-        # Gesto atual
-        gesture_frame = ttk.Frame(card)
-        gesture_frame.pack(fill='x', pady=(0, 5))
+        # Container com fundo
+        status_container = tk.Frame(card, bg=self.colors['bg_tertiary'], relief='flat')
+        status_container.pack(fill='x', padx=5, pady=5)
         
-        ttk.Label(gesture_frame, text="Gesto:", font=('Arial', 9)).pack(side='left')
-        self.gesture_status = ttk.Label(gesture_frame, text="neutral", style='Success.TLabel')
+        # Gesto atual (badge colorido)
+        gesture_frame = tk.Frame(status_container, bg=self.colors['bg_tertiary'])
+        gesture_frame.pack(fill='x', pady=5, padx=8)
+        
+        tk.Label(gesture_frame, text="Gesto:", 
+                font=('Segoe UI', 9), 
+                foreground=self.colors['text_secondary'],
+                bg=self.colors['bg_tertiary']).pack(side='left')
+        
+        self.gesture_status = tk.Label(gesture_frame, text="neutral", 
+                                      font=('Segoe UI', 9, 'bold'),
+                                      bg=self.colors['gesture_neutral'], 
+                                      fg=self.colors['text_on_accent'],
+                                      padx=10, pady=4, relief='flat')
         self.gesture_status.pack(side='right')
         
         # FPS
-        fps_frame = ttk.Frame(card)
-        fps_frame.pack(fill='x', pady=(0, 5))
+        fps_frame = tk.Frame(status_container, bg=self.colors['bg_tertiary'])
+        fps_frame.pack(fill='x', pady=5, padx=8)
         
-        ttk.Label(fps_frame, text="FPS:", font=('Arial', 9)).pack(side='left')
-        self.fps_status = ttk.Label(fps_frame, text="0.0", style='Success.TLabel')
+        tk.Label(fps_frame, text="FPS:", 
+                font=('Segoe UI', 9),
+                foreground=self.colors['text_secondary'],
+                bg=self.colors['bg_tertiary']).pack(side='left')
+        self.fps_status = tk.Label(fps_frame, text="0.0", 
+                                  font=('Segoe UI', 10, 'bold'),
+                                  foreground=self.colors['info'],
+                                  bg=self.colors['bg_tertiary'])
         self.fps_status.pack(side='right')
         
         # Zoom
-        zoom_frame = ttk.Frame(card)
-        zoom_frame.pack(fill='x')
+        zoom_frame = tk.Frame(status_container, bg=self.colors['bg_tertiary'])
+        zoom_frame.pack(fill='x', pady=5, padx=8)
         
-        ttk.Label(zoom_frame, text="Zoom:", font=('Arial', 9)).pack(side='left')
-        self.zoom_status = ttk.Label(zoom_frame, text="1.0x", style='Success.TLabel')
+        tk.Label(zoom_frame, text="Zoom:", 
+                font=('Segoe UI', 9),
+                foreground=self.colors['text_secondary'],
+                bg=self.colors['bg_tertiary']).pack(side='left')
+        self.zoom_status = tk.Label(zoom_frame, text="1.0x", 
+                                   font=('Segoe UI', 10, 'bold'),
+                                   foreground=self.colors['info'],
+                                   bg=self.colors['bg_tertiary'])
         self.zoom_status.pack(side='right')
     
     def on_zoom_changed(self, value):
@@ -630,7 +780,19 @@ class WaveControlApp:
         if hasattr(self, 'video_display'):
             self.video_display.destroy()
         
-        self.video_label.config(text="📷\n\nCâmera não ativada\n\nClique em 'Iniciar' para começar")
+        # Recria placeholder
+        placeholder_frame = tk.Frame(self.video_container, 
+                                    bg=self.colors['video_bg'],
+                                    relief='solid',
+                                    borderwidth=2,
+                                    highlightbackground=self.colors['border_default'])
+        placeholder_frame.pack(expand=True, fill='both')
+        
+        self.video_label = tk.Label(placeholder_frame,
+                                    text="📷\n\nCâmera não ativada\n\nClique em 'Iniciar' para começar",
+                                    justify='center', font=('Segoe UI', 14),
+                                    bg=self.colors['video_bg'], 
+                                    fg=self.colors['text_secondary'])
         self.video_label.pack(expand=True)
         
         # Reset status
@@ -764,7 +926,7 @@ class WaveControlApp:
             
                 # Calibração inicial
                 if now - self.start_ts < CALIBRATION_S:
-                    cv2.putText(frame, "Calibrando...", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
+                    cv2.putText(frame, "Calibrando...", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (220,220,170), 2)
                     self.root.after(0, lambda: self.status_label.config(text="Calibrando...", foreground=self.colors['warning']))
                 else:
                     # Lógica de execução de ações com cooldown
@@ -774,7 +936,7 @@ class WaveControlApp:
                         # Neutral sempre reseta o flag de ação executada
                         if self.action_executed:
                             self.action_executed = False
-                            self.root.after(0, lambda: self.status_label.config(text="Sistema ativo", foreground=self.colors['success']))
+                            self.root.after(0, lambda: self.status_label.config(text="✓ Sistema ativo", foreground=self.colors['success']))
                     elif action != "neutral" and not self.action_executed:
                         # Verifica cooldown: só executa se passou tempo suficiente desde última ação
                         if time_since_last_action >= ACTION_COOLDOWN_S:
@@ -789,19 +951,19 @@ class WaveControlApp:
                             if action == "next":
                                 press_next()
                                 self.analytics.record_gesture("next")
-                                self.root.after(0, lambda: self.status_label.config(text="Próximo →", foreground=self.colors['accent']))
+                                self.root.after(0, lambda: self.status_label.config(text="→ Próximo", foreground=self.colors['gesture_next']))
                             elif action == "prev":
                                 press_prev()
                                 self.analytics.record_gesture("prev")
-                                self.root.after(0, lambda: self.status_label.config(text="← Anterior", foreground=self.colors['accent']))
+                                self.root.after(0, lambda: self.status_label.config(text="← Anterior", foreground=self.colors['gesture_prev']))
                             elif action == "home":
                                 press_home()
                                 self.analytics.record_gesture("home")
-                                self.root.after(0, lambda: self.status_label.config(text="⏮ Início", foreground=self.colors['accent']))
+                                self.root.after(0, lambda: self.status_label.config(text="⇤ Início", foreground=self.colors['gesture_home']))
                             elif action == "end":
                                 press_end()
                                 self.analytics.record_gesture("end")
-                                self.root.after(0, lambda: self.status_label.config(text="⏭ Fim", foreground=self.colors['accent']))
+                                self.root.after(0, lambda: self.status_label.config(text="⇥ Fim", foreground=self.colors['gesture_end']))
                             
                             if action in action_map:
                                 action_name, symbol = action_map[action]
@@ -813,8 +975,48 @@ class WaveControlApp:
                     elif action != "neutral" and self.action_executed:
                         self.root.after(0, lambda: self.status_label.config(text="Aguardando...", foreground=self.colors['warning']))
                 
-                # Atualiza indicadores de status
-                self.root.after(0, lambda: self.gesture_status.config(text=action))
+                # Atualiza indicadores de status com cores
+                def update_gesture_ui(gesture, flash_active):
+                    # Mapeamento de emojis e cores
+                    gesture_config = {
+                        "next": ("👆", self.colors['gesture_next']),
+                        "prev": ("✌️", self.colors['gesture_prev']),
+                        "home": ("🤟", self.colors['gesture_home']),
+                        "end": ("🖖", self.colors['gesture_end']),
+                        "neutral": ("✊", self.colors['gesture_neutral'])
+                    }
+                    
+                    emoji, color = gesture_config.get(gesture, ("✊", self.colors['gesture_neutral']))
+                    
+                    # Atualiza header com animação sutil
+                    self.header_gesture.config(text=f"{emoji} {gesture}", foreground=color)
+                    
+                    # Atualiza badge de status
+                    self.gesture_status.config(text=gesture, bg=color, 
+                                             fg=self.colors['text_on_accent'])
+                    
+                    # Destaca gesto ativo na lista com efeito visual
+                    for gesture_id, label in self.gesture_labels.items():
+                        if gesture_id == gesture:
+                            # Gesto ativo: negrito + cor + background
+                            label.config(font=('Segoe UI', 10, 'bold'), 
+                                       foreground=color,
+                                       bg=self.colors['bg_tertiary'])
+                            
+                            # Efeito flash quando executa ação
+                            if flash_active and gesture != "neutral":
+                                label.config(bg=color, fg=self.colors['text_on_accent'])
+                                # Remove flash após 300ms
+                                self.root.after(300, lambda l=label: 
+                                              l.config(bg=self.colors['bg_tertiary'], 
+                                                      fg=color))
+                        else:
+                            # Gesto inativo: normal
+                            label.config(font=('Segoe UI', 10), 
+                                       foreground=self.colors['text_primary'],
+                                       bg=self.colors['bg_secondary'])
+                
+                self.root.after(0, lambda: update_gesture_ui(action, self.action_executed and action != "neutral"))
                 
                 # Atualiza FPS
                 stats = self.analytics.get_stats_summary()
