@@ -569,6 +569,9 @@ class WaveControlApp:
         last_frame_time = time.time()
         
         while self.is_running and self.cap and self.cap.isOpened():
+            # Início do processamento do frame
+            frame_start_time = time.perf_counter()
+            
             current_time = time.time()
             elapsed = current_time - last_frame_time
             if elapsed < frame_time:
@@ -592,6 +595,10 @@ class WaveControlApp:
             
             if self.zoom_level > 1.0:
                 frame = apply_manual_zoom(frame, self.zoom_level)
+            
+            # Registra tempo de processamento
+            processing_time = (time.perf_counter() - frame_start_time) * 1000
+            self.analytics.record_frame(processing_time)
             
             raw_action = "neutral"
             handed = "Right"
