@@ -1,0 +1,16 @@
+# WaveControl - Flet Edition Requirements
+
+# Core dependencies
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+numpy>=1.24.0
+pillow>=10.0.0
+
+# Keyboard control
+pynput>=1.7.6
+
+# Flet - Modern Flutter-based UI
+flet>=0.24.0
+
+# Python version: 3.8+
+
