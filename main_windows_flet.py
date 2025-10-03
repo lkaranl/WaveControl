@@ -318,6 +318,12 @@ class WaveControlApp:
         
         self.zoom_value_text = ft.Text(f"{DEFAULT_ZOOM:.1f}x", size=16, weight=ft.FontWeight.BOLD)
         
+        # Botões de zoom rápido
+        self.zoom_btn_1x = ft.TextButton("1x", on_click=lambda _: self.set_zoom(1.0))
+        self.zoom_btn_2x = ft.TextButton("2x", on_click=lambda _: self.set_zoom(2.0))
+        self.zoom_btn_3x = ft.TextButton("3x", on_click=lambda _: self.set_zoom(3.0))
+        self.zoom_btn_4x = ft.TextButton("4x", on_click=lambda _: self.set_zoom(4.0))
+        
         self.start_button = ft.ElevatedButton(
             "Iniciar",
             icon="play_arrow",
@@ -403,12 +409,13 @@ class WaveControlApp:
                         ft.Text("Zoom Manual", size=16, weight=ft.FontWeight.BOLD),
                         self.zoom_value_text
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.Text("(Desabilitado durante detecção)", size=10, color="#757575", italic=True),
                     self.zoom_slider,
                     ft.Row([
-                        ft.TextButton("1x", on_click=lambda _: self.set_zoom(1.0)),
-                        ft.TextButton("2x", on_click=lambda _: self.set_zoom(2.0)),
-                        ft.TextButton("3x", on_click=lambda _: self.set_zoom(3.0)),
-                        ft.TextButton("4x", on_click=lambda _: self.set_zoom(4.0)),
+                        self.zoom_btn_1x,
+                        self.zoom_btn_2x,
+                        self.zoom_btn_3x,
+                        self.zoom_btn_4x,
                     ], alignment=ft.MainAxisAlignment.SPACE_AROUND)
                 ], spacing=10),
                 padding=20
@@ -602,6 +609,13 @@ class WaveControlApp:
         self.start_button.icon = "stop"
         self.start_button.style.bgcolor = "#D32F2F"  # Red 700
         
+        # Desabilita controles de zoom para não capturar teclas de seta dos gestos
+        self.zoom_slider.disabled = True
+        self.zoom_btn_1x.disabled = True
+        self.zoom_btn_2x.disabled = True
+        self.zoom_btn_3x.disabled = True
+        self.zoom_btn_4x.disabled = True
+        
         # Mostra o vídeo e esconde placeholder
         self.video_image.visible = True
         
@@ -624,6 +638,13 @@ class WaveControlApp:
         self.start_button.text = "Iniciar"
         self.start_button.icon = "play_arrow"
         self.start_button.style.bgcolor = "#43A047"  # Green 600 - ação positiva
+        
+        # Reabilita controles de zoom
+        self.zoom_slider.disabled = False
+        self.zoom_btn_1x.disabled = False
+        self.zoom_btn_2x.disabled = False
+        self.zoom_btn_3x.disabled = False
+        self.zoom_btn_4x.disabled = False
         
         self.status_text.value = "Sistema parado"
         self.status_text.color = "#FFA726"  # Orange 400
@@ -666,10 +687,6 @@ class WaveControlApp:
             
             res = hands.process(rgb)
             
-            # Aplica zoom manual se necessário
-            if self.zoom_level > 1.0:
-                frame = apply_manual_zoom(frame, self.zoom_level)
-            
             # Registra tempo de processamento
             processing_time = (time.perf_counter() - frame_start_time) * 1000
             self.analytics.record_frame(processing_time)
@@ -689,6 +706,10 @@ class WaveControlApp:
                         _LANDMARK_DRAWING_SPEC,
                         _CONNECTION_DRAWING_SPEC
                     )
+            
+            # Aplica zoom manual DEPOIS de desenhar os landmarks
+            if self.zoom_level > 1.0:
+                frame = apply_manual_zoom(frame, self.zoom_level)
             
             add_gesture_to_history(raw_action)
             action = get_stable_gesture()
