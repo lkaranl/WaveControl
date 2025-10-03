@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import cv2
 import time
+import sys
 import mediapipe as mp
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -9,10 +10,57 @@ import threading
 from pynput.keyboard import Key
 from pynput import keyboard
 from functools import lru_cache
-from collections import Counter
+from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor
 import queue
 from analytics import get_analytics
+from datetime import datetime
+
+# ===== Sistema de Logs Melhorado =====
+class Logger:
+    """Sistema de logs colorido e organizado"""
+    
+    @staticmethod
+    def banner():
+        """Exibe banner de inicialização"""
+        print("\n" + "="*60)
+        print("  🌊 WaveControl - Windows Edition")
+        print("  Versão: 1.0.0")
+        print("  Por: Karan Luciano")
+        print("="*60)
+        
+    @staticmethod
+    def info(message, component="SISTEMA"):
+        """Log informativo"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] ℹ️  [{component}] {message}")
+    
+    @staticmethod
+    def success(message, component="SISTEMA"):
+        """Log de sucesso"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] ✅ [{component}] {message}")
+    
+    @staticmethod
+    def warning(message, component="SISTEMA"):
+        """Log de aviso"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] ⚠️  [{component}] {message}")
+    
+    @staticmethod
+    def error(message, component="SISTEMA"):
+        """Log de erro"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] ❌ [{component}] {message}")
+    
+    @staticmethod
+    def section(title):
+        """Inicia uma nova seção"""
+        print(f"\n{'─'*60}")
+        print(f"  {title}")
+        print(f"{'─'*60}")
+
+log = Logger()
 
 # ===== Configurações =====
 MIN_DET = 0.6
@@ -20,6 +68,10 @@ MIN_TRK = 0.6
 CALIBRATION_S = 2.0     # tempo inicial para estabilizar câmera
 DRAW = True             # mostrar janela com landmarks
 CAM_INDEX = 0           # índice da webcam
+TARGET_FPS = 30         # FPS alvo (limita uso de CPU)
+
+# ===== Cooldown entre comandos =====
+ACTION_COOLDOWN_S = 0.8  # Tempo mínimo entre ações (evita comandos fantasma durante transições)
 
 # ===== Configurações de Zoom =====
 DEFAULT_ZOOM = 1.0      # zoom padrão (sem zoom)
@@ -27,13 +79,19 @@ MIN_ZOOM = 1.0          # zoom mínimo
 MAX_ZOOM = 4.0          # zoom máximo
 
 # ===== Filtro Temporal =====
-GESTURE_WINDOW_SIZE = 8  # número de frames para confirmar gesto
-CONSISTENCY_THRESHOLD = 0.75  # 75% das amostras devem ser iguais
+GESTURE_WINDOW_SIZE = 9  # número de frames para confirmar gesto (balanceado: precisão + responsividade)
+CONSISTENCY_THRESHOLD = 0.78  # 78% das amostras devem ser iguais (7 de 9 frames)
 
 # ===== Dispositivo virtual (pynput para Windows) =====
+log.section("Inicializando Backend de Teclado")
+log.info("Usando pynput para emulação de teclado (Windows)", "BACKEND")
 kb_controller = keyboard.Controller()
+log.success("pynput inicializado com sucesso", "BACKEND")
 
 # ===== MediaPipe =====
+log.section("Inicializando MediaPipe")
+log.info("Carregando modelo de detecção de mãos...", "MEDIAPIPE")
+
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 
@@ -49,6 +107,11 @@ def get_mediapipe_hands():
     )
 
 hands = get_mediapipe_hands()
+log.success(f"MediaPipe inicializado (complexidade: 0, min_det: {MIN_DET}, min_trk: {MIN_TRK})", "MEDIAPIPE")
+
+# Pre-allocated DrawingSpecs para melhor performance (evita criar toda vez)
+_LANDMARK_DRAWING_SPEC = mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2)
+_CONNECTION_DRAWING_SPEC = mp_drawing.DrawingSpec(color=(255,0,0), thickness=2)
 
 # ===== Utilidades de dedos =====
 TIP = { "thumb": 4, "index": 8, "middle": 12, "ring": 16, "pinky": 20 }
@@ -56,7 +119,8 @@ PIP = { "thumb": 3, "index": 6, "middle": 10, "ring": 14, "pinky": 18 }
 
 # Cache para thresholds adaptativos
 _THUMB_THRESHOLD = 0.05
-_FINGER_THRESHOLD = 0.05
+_FINGER_THRESHOLD = 0.06  # Threshold para dedos normais (mais restritivo)
+_INDEX_THRESHOLD = 0.03   # Threshold bem mais sensível para dedo indicador
 
 # MCP indices (base dos dedos) para melhor detecção
 MCP = { "index": 5, "middle": 9, "ring": 13, "pinky": 17 }
@@ -89,6 +153,9 @@ def finger_extended(lm, tip_idx, pip_idx, handed_label):
                 finger_name = name
                 break
         
+        # Threshold específico para cada dedo
+        threshold = _INDEX_THRESHOLD if finger_name == "index" else _FINGER_THRESHOLD
+        
         if finger_name and finger_name in MCP:
             mcp = lm[MCP[finger_name]]
             
@@ -96,16 +163,29 @@ def finger_extended(lm, tip_idx, pip_idx, handed_label):
             # 1. TIP está acima do PIP
             # 2. TIP está acima ou próximo do MCP
             # 3. A diferença é significativa
-            tip_above_pip = tip.y < pip.y - _FINGER_THRESHOLD
-            tip_above_mcp = tip.y < mcp.y + 0.02  # Mais tolerante com MCP
+            tip_above_pip = tip.y < pip.y - threshold
+            
+            # Para indicador, mais tolerância no MCP
+            mcp_tolerance = 0.05 if finger_name == "index" else 0.03
+            tip_above_mcp = tip.y < mcp.y + mcp_tolerance
             
             return tip_above_pip and tip_above_mcp
         
         # Fallback para método antigo
-        return tip.y < pip.y - _FINGER_THRESHOLD
+        return tip.y < pip.y - threshold
 
 # Cache para ordem de dedos
 _FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
+
+def get_extended_fingers(lm, handed_label):
+    """
+    Retorna lista de dedos estendidos para análise detalhada
+    """
+    extended = []
+    for name in _FINGER_NAMES:
+        if finger_extended(lm, TIP[name], PIP[name], handed_label):
+            extended.append(name)
+    return extended
 
 def count_extended(lm, handed_label):
     cnt = 0
@@ -115,47 +195,70 @@ def count_extended(lm, handed_label):
     return cnt
 
 # ===== Histórico de Gestos =====
-gesture_history = []
+# Usa deque para O(1) append e popleft (muito mais rápido que list)
+gesture_history = deque(maxlen=GESTURE_WINDOW_SIZE)
+
+# Cache do último Counter calculado para evitar recálculos
+_last_gesture_counts = None
+_last_history_snapshot = None
+
+def _get_gesture_counts():
+    """Cache para Counter - evita recalcular quando histórico não mudou"""
+    global _last_gesture_counts, _last_history_snapshot
+    
+    # Snapshot do histórico atual
+    current_snapshot = tuple(gesture_history)
+    
+    # Se é o mesmo histórico, retorna cache
+    if current_snapshot == _last_history_snapshot and _last_gesture_counts is not None:
+        return _last_gesture_counts
+    
+    # Recalcula e atualiza cache
+    _last_gesture_counts = Counter(gesture_history)
+    _last_history_snapshot = current_snapshot
+    
+    return _last_gesture_counts
 
 def add_gesture_to_history(gesture):
     gesture_history.append(gesture)
-    if len(gesture_history) > GESTURE_WINDOW_SIZE:
-        gesture_history.pop(0)
 
 def get_stable_gesture():
     """
-    Retorna gesto estável baseado no histórico - otimizado com Counter
-    Agora com confiança adaptativa
+    Retorna gesto estável baseado no histórico - OTIMIZADO
+    Usa cache para evitar recalcular Counter toda vez
     """
-    if len(gesture_history) < GESTURE_WINDOW_SIZE:
-        return "neutral"  # aguarda janela completa
+    if len(gesture_history) < 4:  # Reduzido para responder mais rápido
+        return "neutral"
     
-    # Usa Counter para contar eficientemente
-    gesture_counts = Counter(gesture_history)
+    # Usa Counter cacheado
+    gesture_counts = _get_gesture_counts()
     
     # Encontra o gesto mais frequente
     most_common_gesture, most_common_count = gesture_counts.most_common(1)[0]
     
     # Verifica se atende o threshold de consistência
-    consistency_ratio = most_common_count / GESTURE_WINDOW_SIZE
+    consistency_ratio = most_common_count / len(gesture_history)
     
-    # Threshold adaptativo: se é neutral, requer menos consistência
-    # Se é um gesto de ação, requer mais consistência
+    # Threshold adaptativo: gestos diferentes requerem consistência diferente
     threshold = CONSISTENCY_THRESHOLD
     if most_common_gesture == "neutral":
-        threshold = 0.5  # Mais fácil voltar para neutral
+        threshold = 0.5  # Mais fácil voltar para neutral (5 de 9 frames)
+    elif most_common_gesture == "next":  # Gesto número 1
+        threshold = 0.67  # Mesma sensibilidade dos outros gestos (6 de 9 frames)
     
     if consistency_ratio >= threshold and most_common_gesture != "neutral":
         return most_common_gesture
     
     return "neutral"
 
+
 def get_gesture_confidence():
-    """Retorna a confiança do gesto atual (0-100%)"""
+    """Retorna a confiança do gesto atual (0-100%) - OTIMIZADO"""
     if len(gesture_history) < GESTURE_WINDOW_SIZE:
         return 0.0
     
-    gesture_counts = Counter(gesture_history)
+    # Usa Counter cacheado
+    gesture_counts = _get_gesture_counts()
     most_common_gesture, most_common_count = gesture_counts.most_common(1)[0]
     
     confidence = (most_common_count / GESTURE_WINDOW_SIZE) * 100
@@ -171,7 +274,26 @@ _GESTURE_MAP = {
 }
 
 def classify_gesture(lm, handed_label):
-    n = count_extended(lm, handed_label)
+    """
+    Classifica gesto com lógica melhorada para número 1
+    Prioriza indicador levantado sozinho com verificação dupla
+    """
+    extended_fingers = get_extended_fingers(lm, handed_label)
+    
+    # Detecção especial para gesto número 1
+    # Verifica: indicador levantado E outros dedos (middle, ring, pinky) fechados
+    index_extended = "index" in extended_fingers
+    middle_closed = "middle" not in extended_fingers
+    ring_closed = "ring" not in extended_fingers
+    pinky_closed = "pinky" not in extended_fingers
+    
+    # Se indicador levantado e os 3 últimos dedos fechados = gesto número 1
+    # (ignora polegar completamente)
+    if index_extended and middle_closed and ring_closed and pinky_closed:
+        return "next"  # Gesto número 1
+    
+    # Para outros gestos, conta todos os dedos
+    n = len(extended_fingers)
     return _GESTURE_MAP.get(n, "neutral")
 
 def press_next():
@@ -190,86 +312,22 @@ def press_end():
     kb_controller.press(Key.end)
     kb_controller.release(Key.end)
 
-def calculate_hand_size(landmarks):
+def apply_manual_zoom(frame, zoom_level):
     """
-    Calcula o tamanho da mão baseado nos landmarks
-    Retorna a distância entre o pulso e o dedo médio
+    Aplica zoom digital simples e centralizado
     """
-    wrist = landmarks[0]
-    middle_tip = landmarks[12]
-    
-    # Calcula distância euclidiana
-    dx = middle_tip.x - wrist.x
-    dy = middle_tip.y - wrist.y
-    distance = (dx * dx + dy * dy) ** 0.5
-    
-    return distance
-
-def calculate_hand_center(landmarks):
-    """Calcula o centro da mão baseado nos landmarks"""
-    # Usa média de landmarks chave
-    x_coords = [lm.x for lm in landmarks]
-    y_coords = [lm.y for lm in landmarks]
-    
-    center_x = sum(x_coords) / len(x_coords)
-    center_y = sum(y_coords) / len(y_coords)
-    
-    return center_x, center_y
-
-def apply_smart_zoom(frame, landmarks=None, manual_zoom=1.0, enable_auto=True):
-    """
-    Aplica zoom digital inteligente
-    
-    Args:
-        frame: Frame original
-        landmarks: Landmarks da mão (opcional, para auto-zoom)
-        manual_zoom: Nível de zoom manual
-        enable_auto: Habilita auto-zoom baseado na distância da mão
-    
-    Returns:
-        Frame com zoom aplicado
-    """
-    height, width = frame.shape[:2]
-    zoom_level = manual_zoom
-    center_x, center_y = 0.5, 0.5  # Centro padrão
-    
-    # Auto-zoom: ajusta baseado no tamanho da mão
-    if enable_auto and landmarks is not None:
-        hand_size = calculate_hand_size(landmarks)
-        center_x, center_y = calculate_hand_center(landmarks)
-        
-        # Ajusta zoom baseado no tamanho da mão
-        # Mão pequena (longe) = mais zoom
-        # Mão grande (perto) = menos zoom
-        if hand_size < 0.15:  # Muito longe
-            auto_zoom = 2.0
-        elif hand_size < 0.25:  # Longe
-            auto_zoom = 1.5
-        elif hand_size < 0.35:  # Distância média
-            auto_zoom = 1.2
-        else:  # Perto
-            auto_zoom = 1.0
-        
-        # Combina zoom manual e automático
-        zoom_level = max(manual_zoom, auto_zoom)
-    
     if zoom_level <= 1.0:
-        return frame, 1.0
+        return frame
     
-    # Calcula região a ser extraída (ROI centrado na mão)
+    height, width = frame.shape[:2]
+    
+    # Calcula região a ser extraída (ROI centralizado)
     crop_width = int(width / zoom_level)
     crop_height = int(height / zoom_level)
     
-    # Centraliza no centro da mão (com limites)
-    center_x = max(0.0, min(1.0, center_x))
-    center_y = max(0.0, min(1.0, center_y))
-    
-    start_x = int(center_x * width - crop_width / 2)
-    start_y = int(center_y * height - crop_height / 2)
-    
-    # Garante que está dentro dos limites
-    start_x = max(0, min(width - crop_width, start_x))
-    start_y = max(0, min(height - crop_height, start_y))
+    # Centro da imagem
+    start_x = (width - crop_width) // 2
+    start_y = (height - crop_height) // 2
     
     end_x = start_x + crop_width
     end_y = start_y + crop_height
@@ -280,11 +338,6 @@ def apply_smart_zoom(frame, landmarks=None, manual_zoom=1.0, enable_auto=True):
     # Redimensiona
     zoomed = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
     
-    return zoomed, zoom_level
-
-def apply_digital_zoom(frame, zoom_level):
-    """Compatibilidade: aplica zoom digital simples"""
-    zoomed, _ = apply_smart_zoom(frame, landmarks=None, manual_zoom=zoom_level, enable_auto=False)
     return zoomed
 
 # ===== Interface Tkinter para Windows =====
@@ -304,10 +357,9 @@ class WaveControlApp:
         self.start_ts = None
         self.last_action = "neutral"
         self.action_executed = False
+        self.last_action_time = 0  # Timestamp da última ação (para cooldown)
         self.zoom_level = tk.DoubleVar(value=DEFAULT_ZOOM)
         self.show_landmarks = tk.BooleanVar(value=DRAW)
-        self.auto_zoom_enabled = tk.BooleanVar(value=True)  # Auto-zoom inteligente
-        self.current_auto_zoom = 1.0
         
         # Frame pooling para reduzir alocações
         self._frame_buffer = None
@@ -413,12 +465,6 @@ class WaveControlApp:
         # Card de Status
         self.create_status_card(sidebar)
         
-        # Card de Configurações
-        self.create_config_card(sidebar)
-        
-        # Card de Métricas
-        self.create_metrics_card(sidebar)
-        
         # ===== ÁREA DE VÍDEO =====
         video_frame = ttk.Frame(content_frame, style='Card.TFrame')
         video_frame.pack(side='right', fill='both', expand=True)
@@ -483,10 +529,6 @@ class WaveControlApp:
         card = ttk.LabelFrame(parent, text="Status do Sistema", padding=15)
         card.pack(fill='x', pady=(0, 10))
         
-        # Status principal
-        self.main_status = ttk.Label(card, text="Sistema parado", font=('Arial', 9))
-        self.main_status.pack(anchor='w', pady=(0, 10))
-        
         # Gesto atual
         gesture_frame = ttk.Frame(card)
         gesture_frame.pack(fill='x', pady=(0, 5))
@@ -495,70 +537,31 @@ class WaveControlApp:
         self.gesture_status = ttk.Label(gesture_frame, text="neutral", style='Success.TLabel')
         self.gesture_status.pack(side='right')
         
-        # Filtro temporal
-        filter_frame = ttk.Frame(card)
-        filter_frame.pack(fill='x')
-        
-        ttk.Label(filter_frame, text="Filtro:", font=('Arial', 9)).pack(side='left')
-        self.filter_status = ttk.Label(filter_frame, text="0/8", style='Warning.TLabel')
-        self.filter_status.pack(side='right')
-        
-        # Confiança do gesto
-        confidence_frame = ttk.Frame(card)
-        confidence_frame.pack(fill='x', pady=(0, 5))
-        
-        ttk.Label(confidence_frame, text="Confiança:", font=('Arial', 9)).pack(side='left')
-        self.confidence_status = ttk.Label(confidence_frame, text="0%", style='Success.TLabel')
-        self.confidence_status.pack(side='right')
-        
         # FPS
         fps_frame = ttk.Frame(card)
-        fps_frame.pack(fill='x')
+        fps_frame.pack(fill='x', pady=(0, 5))
         
         ttk.Label(fps_frame, text="FPS:", font=('Arial', 9)).pack(side='left')
         self.fps_status = ttk.Label(fps_frame, text="0.0", style='Success.TLabel')
         self.fps_status.pack(side='right')
-    
-    def create_config_card(self, parent):
-        card = ttk.LabelFrame(parent, text="Configurações", padding=15)
-        card.pack(fill='x', pady=(0, 10))
         
-        landmarks_check = ttk.Checkbutton(card, text="Mostrar landmarks",
-                                         variable=self.show_landmarks)
-        landmarks_check.pack(anchor='w')
+        # Zoom
+        zoom_frame = ttk.Frame(card)
+        zoom_frame.pack(fill='x')
         
-        # Auto-zoom
-        auto_zoom_check = ttk.Checkbutton(card, text="Auto-zoom inteligente",
-                                         variable=self.auto_zoom_enabled)
-        auto_zoom_check.pack(anchor='w', pady=(5, 0))
-    
-    def create_metrics_card(self, parent):
-        card = ttk.LabelFrame(parent, text="Métricas", padding=15)
-        card.pack(fill='x', pady=(0, 10))
-        
-        # Total de gestos
-        gestures_frame = ttk.Frame(card)
-        gestures_frame.pack(fill='x', pady=(0, 5))
-        
-        ttk.Label(gestures_frame, text="Gestos:", font=('Arial', 9)).pack(side='left')
-        self.total_gestures_status = ttk.Label(gestures_frame, text="0", style='Success.TLabel')
-        self.total_gestures_status.pack(side='right')
-        
-        # Frames processados
-        frames_frame = ttk.Frame(card)
-        frames_frame.pack(fill='x')
-        
-        ttk.Label(frames_frame, text="Frames:", font=('Arial', 9)).pack(side='left')
-        self.total_frames_status = ttk.Label(frames_frame, text="0", style='Success.TLabel')
-        self.total_frames_status.pack(side='right')
+        ttk.Label(zoom_frame, text="Zoom:", font=('Arial', 9)).pack(side='left')
+        self.zoom_status = ttk.Label(zoom_frame, text="1.0x", style='Success.TLabel')
+        self.zoom_status.pack(side='right')
     
     def on_zoom_changed(self, value):
         zoom_val = float(value)
         self.zoom_value_label.config(text=f"{zoom_val:.1f}x")
+        self.zoom_status.config(text=f"{zoom_val:.1f}x")
     
     def set_zoom(self, zoom_value):
         self.zoom_level.set(zoom_value)
         self.zoom_value_label.config(text=f"{zoom_value:.1f}x")
+        self.zoom_status.config(text=f"{zoom_value:.1f}x")
     
     def toggle_detection(self):
         if not self.is_running:
@@ -570,25 +573,30 @@ class WaveControlApp:
         global gesture_history
         gesture_history.clear()
         
+        log.section("Iniciando Detecção de Gestos")
+        log.info(f"Abrindo câmera (índice: {CAM_INDEX}, resolução: 800x600)...", "CAMERA")
+        
         self.cap = cv2.VideoCapture(CAM_INDEX)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 600)
         
         if not self.cap.isOpened():
+            log.error("Falha ao acessar a câmera", "CAMERA")
             messagebox.showerror("Erro", "Não foi possível acessar a câmera.\nVerifique se está conectada e disponível.")
             return
         
+        log.success("Câmera aberta com sucesso", "CAMERA")
         self.is_running = True
         self.start_ts = time.time()
         
         # Inicia sessão de analytics
         self.analytics.start_session()
         self.analytics.set_calibration_time(CALIBRATION_S)
+        log.info(f"Período de calibração: {CALIBRATION_S}s", "DETECÇÃO")
         
         # Atualiza interface
         self.start_button.config(text="⏹ Parar")
         self.status_label.config(text="Calibrando...", foreground=self.colors['warning'])
-        self.main_status.config(text="Sistema calibrando...")
         
         # Remove placeholder
         self.video_label.pack_forget()
@@ -599,6 +607,7 @@ class WaveControlApp:
         self.processing_thread.start()
     
     def stop_detection(self):
+        log.section("Parando Detecção de Gestos")
         self.is_running = False
         
         # Finaliza sessão de analytics
@@ -606,16 +615,16 @@ class WaveControlApp:
         
         if self.cap:
             self.cap.release()
+            log.info("Câmera liberada", "CAMERA")
         
         # Atualiza interface
         self.start_button.config(text="▶ Iniciar")
         self.status_label.config(text="Sistema parado", foreground=self.colors['warning'])
-        self.main_status.config(text="Sistema parado")
         
         # Mostra estatísticas no terminal
-        print("\n" + "="*50)
+        log.section("Estatísticas da Sessão")
         self.analytics.print_stats()
-        print("="*50 + "\n")
+        log.info("Detecção finalizada", "DETECÇÃO")
         
         # Limpa vídeo e mostra placeholder
         if hasattr(self, 'video_display'):
@@ -626,40 +635,16 @@ class WaveControlApp:
         
         # Reset status
         self.gesture_status.config(text="neutral")
-        self.filter_status.config(text="0/8")
-        self.confidence_status.config(text="0%")
         self.fps_status.config(text="0.0")
-        
-        # Reset métricas
-        stats = self.analytics.get_stats_summary()
-        self.total_gestures_status.config(text=str(stats['usage']['total_gestures']))
-        self.total_frames_status.config(text=str(stats['performance']['total_frames']))
     
     def _process_frame_async(self, frame_data):
-        """Processa frame em thread separada"""
+        """Processa frame em thread separada - OTIMIZADO"""
         start_time = time.perf_counter()
         
         frame, zoom_level, show_landmarks = frame_data
         
         # Frame pooling: reutiliza buffers pré-alocados
         frame = cv2.flip(frame, 1)
-        
-        # Primeiro processa para detectar mão (antes do zoom)
-        temp_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        temp_res = hands.process(temp_rgb)
-        
-        # Pega landmarks se disponível
-        hand_landmarks = None
-        if temp_res.multi_hand_landmarks:
-            hand_landmarks = temp_res.multi_hand_landmarks[0].landmark
-        
-        # Aplica zoom inteligente (auto + manual)
-        frame, actual_zoom = apply_smart_zoom(
-            frame,
-            landmarks=hand_landmarks,
-            manual_zoom=zoom_level,
-            enable_auto=self.auto_zoom_enabled.get()
-        )
         
         # Reutiliza buffers quando possível
         if self._rgb_buffer is None or self._rgb_buffer.shape != frame.shape:
@@ -669,7 +654,12 @@ class WaveControlApp:
             cv2.cvtColor(frame, cv2.COLOR_BGR2RGB, dst=self._rgb_buffer)
             rgb = self._rgb_buffer
         
+        # OTIMIZAÇÃO: Processa MediaPipe apenas 1x por frame
         res = hands.process(rgb)
+        
+        # Aplica zoom manual após processamento
+        if zoom_level > 1.0:
+            frame = apply_manual_zoom(frame, zoom_level)
         
         # Métrica de tempo de processamento
         processing_time = (time.perf_counter() - start_time) * 1000
@@ -684,15 +674,15 @@ class WaveControlApp:
                 handed = res.multi_handedness[0].classification[0].label
             raw_action = classify_gesture(lm.landmark, handed)
             
-            # Desenha landmarks se habilitado
+            # Desenha landmarks se habilitado (usa pre-allocated specs)
             if show_landmarks:
                 mp_drawing.draw_landmarks(
                     frame, lm, mp_hands.HAND_CONNECTIONS,
-                    mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2),
-                    mp_drawing.DrawingSpec(color=(255,0,0), thickness=2)
+                    _LANDMARK_DRAWING_SPEC,
+                    _CONNECTION_DRAWING_SPEC
                 )
         
-        return raw_action, frame, res, actual_zoom
+        return raw_action, frame, res
     
     def _gesture_processor_thread(self):
         """Thread dedicada para processar gestos de forma assíncrona"""
@@ -726,6 +716,8 @@ class WaveControlApp:
         processor_thread = threading.Thread(target=self._gesture_processor_thread, daemon=True)
         processor_thread.start()
         
+        frame_start_time = time.time()
+        
         try:
             while self.is_running and self.cap and self.cap.isOpened():
                 ok, frame = self.cap.read()
@@ -747,11 +739,15 @@ class WaveControlApp:
                 raw_action = "neutral"
                 processed_frame = None
                 res = None
-                actual_zoom = 1.0
                 
                 try:
-                    raw_action, processed_frame, res, actual_zoom = self._result_queue.get_nowait()
+                    raw_action, processed_frame, res = self._result_queue.get_nowait()
                 except queue.Empty:
+                    # OTIMIZAÇÃO: Limitação de FPS
+                    elapsed = time.time() - frame_start_time
+                    sleep_time = max(0, (1.0 / TARGET_FPS) - elapsed)
+                    time.sleep(sleep_time)
+                    frame_start_time = time.time()
                     continue
                 
                 if processed_frame is None:
@@ -763,70 +759,68 @@ class WaveControlApp:
                 gesture_confidence = get_gesture_confidence()
                 
                 frame = processed_frame
-                self.current_auto_zoom = actual_zoom
             
                 now = time.time()
             
-                # Informações visuais na tela
-                if hasattr(self, 'current_auto_zoom') and self.current_auto_zoom > 1.0:
-                    zoom_text = f"Zoom: {self.current_auto_zoom:.1f}x"
-                    if self.auto_zoom_enabled.get():
-                        zoom_text += " (Auto)"
-                    cv2.putText(frame, zoom_text, (20, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
-                
                 # Calibração inicial
                 if now - self.start_ts < CALIBRATION_S:
                     cv2.putText(frame, "Calibrando...", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
                     self.root.after(0, lambda: self.status_label.config(text="Calibrando...", foreground=self.colors['warning']))
-                    self.root.after(0, lambda: self.main_status.config(text="Sistema calibrando..."))
                 else:
-                    # Lógica de execução de ações
+                    # Lógica de execução de ações com cooldown
+                    time_since_last_action = now - self.last_action_time
+                    
                     if action == "neutral":
+                        # Neutral sempre reseta o flag de ação executada
                         if self.action_executed:
                             self.action_executed = False
                             self.root.after(0, lambda: self.status_label.config(text="Sistema ativo", foreground=self.colors['success']))
-                            self.root.after(0, lambda: self.main_status.config(text="Sistema ativo - Pronto"))
                     elif action != "neutral" and not self.action_executed:
-                        if action == "next":
-                            press_next()
-                            self.analytics.record_gesture("next")
-                            self.root.after(0, lambda: self.status_label.config(text="Próximo →", foreground=self.colors['accent']))
-                            self.root.after(0, lambda: self.main_status.config(text="Próximo slide executado"))
-                        elif action == "prev":
-                            press_prev()
-                            self.analytics.record_gesture("prev")
-                            self.root.after(0, lambda: self.status_label.config(text="← Anterior", foreground=self.colors['accent']))
-                            self.root.after(0, lambda: self.main_status.config(text="Slide anterior executado"))
-                        elif action == "home":
-                            press_home()
-                            self.analytics.record_gesture("home")
-                            self.root.after(0, lambda: self.status_label.config(text="⏮ Início", foreground=self.colors['accent']))
-                            self.root.after(0, lambda: self.main_status.config(text="Indo para o início"))
-                        elif action == "end":
-                            press_end()
-                            self.analytics.record_gesture("end")
-                            self.root.after(0, lambda: self.status_label.config(text="⏭ Fim", foreground=self.colors['accent']))
-                            self.root.after(0, lambda: self.main_status.config(text="Indo para o fim"))
-                        self.action_executed = True
-                        self.last_action = action
+                        # Verifica cooldown: só executa se passou tempo suficiente desde última ação
+                        if time_since_last_action >= ACTION_COOLDOWN_S:
+                            # Mapeamento de ações para log
+                            action_map = {
+                                "next": ("Próximo", "→"),
+                                "prev": ("Anterior", "←"),
+                                "home": ("Início", "⇤"),
+                                "end": ("Fim", "⇥")
+                            }
+                            
+                            if action == "next":
+                                press_next()
+                                self.analytics.record_gesture("next")
+                                self.root.after(0, lambda: self.status_label.config(text="Próximo →", foreground=self.colors['accent']))
+                            elif action == "prev":
+                                press_prev()
+                                self.analytics.record_gesture("prev")
+                                self.root.after(0, lambda: self.status_label.config(text="← Anterior", foreground=self.colors['accent']))
+                            elif action == "home":
+                                press_home()
+                                self.analytics.record_gesture("home")
+                                self.root.after(0, lambda: self.status_label.config(text="⏮ Início", foreground=self.colors['accent']))
+                            elif action == "end":
+                                press_end()
+                                self.analytics.record_gesture("end")
+                                self.root.after(0, lambda: self.status_label.config(text="⏭ Fim", foreground=self.colors['accent']))
+                            
+                            if action in action_map:
+                                action_name, symbol = action_map[action]
+                                log.success(f"Comando executado: {action_name} {symbol} (confiança: {gesture_confidence:.0f}%)", "GESTO")
+                            
+                            self.action_executed = True
+                            self.last_action = action
+                            self.last_action_time = now  # Registra timestamp da ação
                     elif action != "neutral" and self.action_executed:
                         self.root.after(0, lambda: self.status_label.config(text="Aguardando...", foreground=self.colors['warning']))
-                        self.root.after(0, lambda: self.main_status.config(text="Aguardando posição neutra"))
                 
                 # Atualiza indicadores de status
                 self.root.after(0, lambda: self.gesture_status.config(text=action))
-                self.root.after(0, lambda: self.filter_status.config(text=f"{len(gesture_history)}/{GESTURE_WINDOW_SIZE}"))
-                self.root.after(0, lambda: self.confidence_status.config(text=f"{gesture_confidence:.0f}%"))
                 
-                # Atualiza FPS e métricas
+                # Atualiza FPS
                 stats = self.analytics.get_stats_summary()
                 fps_value = stats['performance']['fps']
-                total_gestures = stats['usage']['total_gestures']
-                total_frames = stats['performance']['total_frames']
                 
                 self.root.after(0, lambda: self.fps_status.config(text=f"{fps_value:.1f}"))
-                self.root.after(0, lambda: self.total_gestures_status.config(text=str(total_gestures)))
-                self.root.after(0, lambda: self.total_frames_status.config(text=str(total_frames)))
                 
                 # Converte frame para exibição na GUI
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -855,7 +849,11 @@ class WaveControlApp:
                 photo = ImageTk.PhotoImage(image)
                 self.root.after(0, lambda: self.update_video_display(photo))
                 
-                time.sleep(0.01)  # ~100 FPS captura, processamento assíncrono
+                # OTIMIZAÇÃO: Limitação de FPS
+                elapsed = time.time() - frame_start_time
+                sleep_time = max(0, (1.0 / TARGET_FPS) - elapsed)
+                time.sleep(sleep_time)
+                frame_start_time = time.time()
         finally:
             # Para thread de processamento
             self._processing_active = False
@@ -887,10 +885,35 @@ class WaveControlApp:
         
         if hands:
             hands.close()
+        
+        log.section("Encerrando WaveControl")
+        log.info("Até logo! 👋", "SISTEMA")
+        
         self.root.destroy()
 
 # ===== Execução Principal =====
 def main():
+    # Banner de inicialização
+    log.banner()
+    
+    # Informações do sistema
+    log.section("Informações do Sistema")
+    log.info(f"Sistema Operacional: {sys.platform}", "SISTEMA")
+    log.info(f"Python: {sys.version.split()[0]}", "SISTEMA")
+    log.info(f"OpenCV: {cv2.__version__}", "SISTEMA")
+    log.info(f"MediaPipe: {mp.__version__}", "SISTEMA")
+    
+    # Configurações
+    log.section("Configurações")
+    log.info(f"FPS alvo: {TARGET_FPS}", "CONFIG")
+    log.info(f"Cooldown entre ações: {ACTION_COOLDOWN_S}s", "CONFIG")
+    log.info(f"Janela de gestos: {GESTURE_WINDOW_SIZE} frames", "CONFIG")
+    log.info(f"Calibração inicial: {CALIBRATION_S}s", "CONFIG")
+    
+    # Inicialização da interface
+    log.section("Iniciando Interface Gráfica")
+    log.info("Carregando componentes Tkinter...", "GUI")
+    
     root = tk.Tk()
     
     # Ícone da janela (opcional)
@@ -901,8 +924,18 @@ def main():
     except:
         pass
     
-    app = WaveControlApp(root)
-    root.mainloop()
+    try:
+        app = WaveControlApp(root)
+        log.success("Interface carregada com sucesso", "GUI")
+        log.info("Pronto para uso!", "GUI")
+        
+        root.mainloop()
+    except KeyboardInterrupt:
+        log.warning("Interrompido pelo usuário (Ctrl+C)", "SISTEMA")
+    except Exception as e:
+        log.error(f"Erro fatal: {e}", "SISTEMA")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
