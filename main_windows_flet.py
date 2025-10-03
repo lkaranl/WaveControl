@@ -294,14 +294,70 @@ class WaveControlApp:
         
         # Loading da câmera
         self.camera_loading = ft.Container(
-            content=ft.Column([
-                ft.ProgressRing(width=64, height=64, stroke_width=4, color="#1976D2"),
-                ft.Text("Abrindo câmera...", size=18, weight=ft.FontWeight.BOLD, color="#1976D2"),
-                ft.Text("Aguarde alguns segundos", size=14, color="#9E9E9E"),
-            ], 
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=15),
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Container(
+                        content=ft.Stack([
+                            ft.Container(
+                                width=120,
+                                height=120,
+                                border_radius=60,
+                                bgcolor="#1976D2",
+                                opacity=0.15,
+                            ),
+                            ft.Container(
+                                content=ft.ProgressRing(
+                                    width=80, 
+                                    height=80, 
+                                    stroke_width=6, 
+                                    color="#42A5F5"
+                                ),
+                                alignment=ft.alignment.center,
+                            ),
+                            ft.Container(
+                                content=ft.Icon(
+                                    name="videocam",
+                                    size=40,
+                                    color="#1976D2"
+                                ),
+                                alignment=ft.alignment.center,
+                            ),
+                        ]),
+                        alignment=ft.alignment.center,
+                        width=120,
+                        height=120,
+                    ),
+                    ft.Text(
+                        "Abrindo câmera...", 
+                        size=24, 
+                        weight=ft.FontWeight.BOLD, 
+                        color="#42A5F5"
+                    ),
+                    ft.Text(
+                        "Aguarde alguns segundos", 
+                        size=14, 
+                        color="#9E9E9E"
+                    ),
+                    ft.Container(height=10),
+                    ft.ProgressBar(
+                        width=200,
+                        color="#42A5F5",
+                        bgcolor="#263238",
+                    ),
+                ], 
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=20),
+                padding=40,
+                border_radius=20,
+                bgcolor="#1E1E1E",
+                shadow=ft.BoxShadow(
+                    spread_radius=1,
+                    blur_radius=15,
+                    color="#00000030",
+                    offset=ft.Offset(0, 4),
+                ),
+            ),
             alignment=ft.alignment.center,
             visible=False,
             expand=True

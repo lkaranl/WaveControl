@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+instalador/WaveControlSetup.exe
+
 # C extensions
 *.so
 
