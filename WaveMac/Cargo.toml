@@ -1,0 +1,36 @@
+[package]
+name = "wavemac"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "wavemac"
+path = "src/main.rs"
+
+[dependencies]
+# Câmera via AVFoundation (macOS)
+nokhwa = { version = "0.10", features = ["input-native"] }
+
+# ONNX Runtime para inferência de hand landmarks
+ort = { version = "2.0.0-rc.12", features = ["download-binaries"] }
+
+# Processamento de imagem e tensores
+image = "0.25"
+ndarray = "0.17"
+
+# Simulação de teclado no macOS (CGEventPost via Core Graphics)
+enigo = "0.2"
+
+# Canais de alta performance para threads producer/consumer
+crossbeam-channel = "0.5"
+
+# Parser de argumentos CLI
+clap = { version = "4", features = ["derive"] }
+
+# Utilitários
+log = "0.4"
+env_logger = "0.11"
+thiserror = "2"
+anyhow = "1"
+ctrlc = "3"
+minifb = "0.25"
