@@ -13,7 +13,8 @@ OTIMIZAÇÕES IMPLEMENTADAS:
 """
 import cv2
 import time
-import uinput
+import subprocess
+import sys
 import mediapipe as mp
 from functools import lru_cache
 from collections import Counter
@@ -31,8 +32,78 @@ CAM_INDEX = 0           # índice da webcam
 GESTURE_WINDOW_SIZE = 8  # número de frames para confirmar gesto
 CONSISTENCY_THRESHOLD = 0.75  # 75% das amostras devem ser iguais
 
-# ===== Dispositivo virtual (uinput) =====
-kb = uinput.Device([uinput.KEY_RIGHT, uinput.KEY_LEFT, uinput.KEY_HOME, uinput.KEY_END])
+# ===== Abstração de Emulação de Teclado Multiplataforma =====
+IS_MAC = sys.platform == "darwin"
+
+class KeyboardEmulator:
+    def __init__(self):
+        self.backend = None
+        if IS_MAC:
+            # Tenta pynput para alta performance (Quartz Event Services)
+            try:
+                from pynput.keyboard import Key, Controller
+                self.keyboard = Controller()
+                self.backend = "pynput"
+                self._key_map = {
+                    "right": Key.right,
+                    "left": Key.left,
+                    "home": Key.home,
+                    "end": Key.end
+                }
+                print("🎮 Emulador de teclado: pynput (macOS)")
+            except ImportError:
+                self.backend = "applescript"
+                # Keycodes virtuais do macOS: 124=Right, 123=Left, 115=Home, 119=End
+                self._key_map = {
+                    "right": 124,
+                    "left": 123,
+                    "home": 115,
+                    "end": 119
+                }
+                print("🎮 Emulador de teclado: AppleScript / osascript (macOS - fallback)")
+                print("   💡 Dica: Para menor latência e maior suavidade, instale o pynput:")
+                print("      pip3 install pynput")
+        else:
+            # Linux (uinput)
+            try:
+                import uinput
+                self.device = uinput.Device([uinput.KEY_RIGHT, uinput.KEY_LEFT, uinput.KEY_HOME, uinput.KEY_END])
+                self.backend = "uinput"
+                self._key_map = {
+                    "right": uinput.KEY_RIGHT,
+                    "left": uinput.KEY_LEFT,
+                    "home": uinput.KEY_HOME,
+                    "end": uinput.KEY_END
+                }
+                print("🎮 Emulador de teclado: uinput (Linux)")
+            except ImportError:
+                self.backend = "dummy"
+                print("⚠️  Aviso: python-uinput não está instalado.")
+                print("🎮 Emulador de teclado: Modo simulação (apenas logs no terminal)")
+
+    def press_key(self, key_name):
+        if self.backend == "pynput":
+            k = self._key_map.get(key_name)
+            if k:
+                self.keyboard.press(k)
+                self.keyboard.release(k)
+        elif self.backend == "applescript":
+            code = self._key_map.get(key_name)
+            if code:
+                # Executa de forma silenciosa
+                subprocess.run(
+                    ["osascript", "-e", f'tell application "System Events" to key code {code}'],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+        elif self.backend == "uinput":
+            k = self._key_map.get(key_name)
+            if k:
+                self.device.emit_click(k)
+        else:
+            print(f"   [TECLA SIMULADA] {key_name.upper()}")
+
+kb = KeyboardEmulator()
 
 # ===== MediaPipe =====
 mp_hands = mp.solutions.hands
@@ -129,16 +200,16 @@ def classify_gesture(lm, handed_label):
     return _GESTURE_MAP.get(n, "neutral")
 
 def press_next():
-    kb.emit_click(uinput.KEY_RIGHT)
+    kb.press_key("right")
 
 def press_prev():
-    kb.emit_click(uinput.KEY_LEFT)
+    kb.press_key("left")
 
 def press_home():
-    kb.emit_click(uinput.KEY_HOME)
+    kb.press_key("home")
 
 def press_end():
-    kb.emit_click(uinput.KEY_END)
+    kb.press_key("end")
 
 # ===== Controle de Estado =====
 class WaveControlCLI:
@@ -200,6 +271,11 @@ class WaveControlCLI:
         
         print("🎯 WaveControl CLI - Iniciando detecção de gestos...")
         
+        if IS_MAC:
+            print("⚠️  Permissão necessária no macOS:")
+            print("   Configurações do Sistema → Privacidade & Segurança → Acessibilidade")
+            print("   Adicione e ative o seu terminal à lista para simular teclas.\n")
+            
         self.cap, cam_index = self.find_camera()
         if self.cap is None:
             print("❌ Erro: Nenhuma câmera disponível encontrada!")

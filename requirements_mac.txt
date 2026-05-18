@@ -1,0 +1,6 @@
+# Dependências do WaveControl para macOS
+# ⚠️ Recomenda-se o uso do Python 3.11 para compatibilidade total com o mediapipe.
+
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+pynput>=1.7.6
