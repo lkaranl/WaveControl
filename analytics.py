@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sistema de Analytics e Métricas para WaveControl
+Sistema dasasase Analytics e Métricas para WaveControl
 
 Coleta e exibe métricas de:
 - Performance (FPS, latência, CPU, memória)
